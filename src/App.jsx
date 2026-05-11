@@ -1,136 +1,180 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as Phaser from 'phaser';
-import { io } from 'socket.io-client';
-
-const socket = io('http://localhost:3001');
-
-class PlayScene extends Phaser.Scene {
-  constructor() {
-    super('PlayScene');
-    this.myTank = null;
-    this.otherTanks = {};
-    this.worldSize = { width: 2000, height: 2000 };
-    this.config = { moveSpeed: 3, rotateSpeed: 2 };
-  }
-
-  create() {
-    const { width, height } = this.worldSize;
-    this.physics.world.setBounds(0, 0, width, height);
-
-    // 1. Vẽ nền lưới (Grid)
-    const graphics = this.add.graphics().lineStyle(2, 0x333333, 1);
-    for (let i = 0; i <= width; i += 100) graphics.lineBetween(i, 0, i, height);
-    for (let j = 0; j <= height; j += 100) graphics.lineBetween(0, j, width, j);
-
-    // 2. Thiết lập phím điều khiển
-    this.controls = {
-      ...this.input.keyboard.createCursorKeys(),
-      ...this.input.keyboard.addKeys('W,A,S,D')
-    };
-
-    // 3. Khởi tạo Camera Minimap
-    this.minimap = this.cameras.add(10, 10, 150, 150)
-      .setZoom(0.07).setBackgroundColor(0x000000).setBounds(0, 0, width, height);
-
-    this.setupSockets();
-  }
-
-  setupSockets() {
-    socket.on('currentPlayers', (players) => {
-      Object.entries(players).forEach(([id, info]) => {
-        id === socket.id ? this.createTank(info, true) : this.createTank(info, false);
-      });
-    });
-
-    socket.on('newPlayer', (info) => this.createTank(info, false));
-
-    socket.on('playerMoved', ({ id, x, y, angle }) => {
-      if (this.otherTanks[id]) {
-        this.otherTanks[id].setPosition(x, y).setAngle(angle);
-      }
-    });
-
-    socket.on('playerDisconnected', (id) => {
-      if (this.otherTanks[id]) {
-        this.otherTanks[id].destroy();
-        delete this.otherTanks[id];
-      }
-    });
-  }
-
-  createTank(info, isMine) {
-    const color = isMine ? 0x00ff00 : 0xff0000;
-    const tank = this.add.container(info.x, info.y);
-    
-    const body = this.add.rectangle(0, 0, 44, 44, color).setStrokeStyle(isMine ? 3 : 2, 0xffffff);
-    const cannon = this.add.rectangle(22, 0, 24, 10, color).setStrokeStyle(2, 0xffffff);
-    tank.add([body, cannon]).setAngle(info.angle || 0);
-
-    if (isMine) {
-      this.myTank = tank;
-      this.physics.world.enable(tank);
-      tank.body.setCollideWorldBounds(true).setSize(44, 44);
-      this.cameras.main.startFollow(tank, true, 0.1, 0.1);
-      this.minimap.startFollow(tank, true);
-    } else {
-      this.otherTanks[info.id] = tank;
-    }
-  }
-
-  update() {
-    if (!this.myTank) return;
-
-    const { W, S, A, D, up, down, left, right } = this.controls;
-    const { moveSpeed, rotateSpeed } = this.config;
-    
-    let moved = false;
-    const isRotating = left.isDown || right.isDown || A.isDown || D.isDown;
-    const isMoving = up.isDown || down.isDown || W.isDown || S.isDown;
-
-    // Ưu tiên xoay khi đứng yên, hoặc tiến/lùi khi không xoay
-    if (isRotating && !isMoving) {
-      this.myTank.angle += (left.isDown || A.isDown) ? -rotateSpeed : rotateSpeed;
-      moved = true;
-    } 
-    else if (isMoving && !isRotating) {
-      const rotation = Phaser.Math.DegToRad(this.myTank.angle);
-      const direction = (up.isDown || W.isDown) ? 1 : -1;
-      this.myTank.x += Math.cos(rotation) * moveSpeed * direction;
-      this.myTank.y += Math.sin(rotation) * moveSpeed * direction;
-      moved = true;
-    }
-
-    if (moved) {
-      socket.emit('playerMovement', { x: this.myTank.x, y: this.myTank.y, angle: this.myTank.angle });
-    }
-  }
-}
+import PlayScene from './game/scenes/PlayScene.js';
 
 function App() {
+  const gameRef = useRef(null);
+  const [playerName, setPlayerName] = useState('');
+  const [hasJoined, setHasJoined] = useState(false);
+  const [nameError, setNameError] = useState('');
+
+  const handlePlay = () => {
+    const name = playerName.trim();
+    if (!name) {
+      setNameError('Please enter your name.');
+      return;
+    }
+    if (!/^[A-Za-z0-9_-]{1,10}$/.test(name)) {
+      setNameError('Name must be 1-10 characters. Letters, numbers, _ or - only.');
+      return;
+    }
+    setNameError('');
+    setHasJoined(true);
+    window.__playerName = name;
+  };
+
   useEffect(() => {
+    if (!hasJoined) return;
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
     const config = {
       type: Phaser.AUTO,
       parent: 'phaser-game',
-      width: 800,
-      height: 600,
-      backgroundColor: '#1a1a1a',
+      width,
+      height,
+      backgroundColor: '#1a1a2e',
       scene: PlayScene,
-      physics: { default: 'arcade' },
-      disableVisibilityChange: true
+      physics: {
+        default: 'arcade',
+        arcade: {
+          gravity: { y: 0 },
+          debug: false
+        }
+      },
+      disableVisibilityChange: true,
+      pauseOnBlur: false,
+      scale: {
+        mode: Phaser.Scale.RESIZE,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+      }
     };
-    const game = new Phaser.Game(config);
+
+    gameRef.current = new Phaser.Game(config);
+
+    const handleResize = () => {
+      if (gameRef.current) {
+        gameRef.current.scale.resize(window.innerWidth, window.innerHeight);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
     return () => {
-      ['currentPlayers', 'newPlayer', 'playerMoved', 'playerDisconnected'].forEach(ev => socket.off(ev));
-      game.destroy(true);
+      window.removeEventListener('resize', handleResize);
+      if (gameRef.current) {
+        gameRef.current.destroy(true);
+        gameRef.current = null;
+      }
     };
-  }, []);
+  }, [hasJoined]);
 
   return (
-    <div style={{ textAlign: 'center', backgroundColor: '#111', minHeight: '100vh', color: 'white', paddingTop: '20px' }}>
-      <h2 style={{ color: '#00ff00' }}>TANK ONLINE </h2>
-      <div id="phaser-game" style={{ border: '2px solid #333', display: 'inline-block' }}></div>
-      <p style={{ opacity: 0.6 }}>WASD / Mũi tên</p>
-    </div>
+    <>
+      {!hasJoined && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            fontFamily: 'Arial, sans-serif'
+          }}
+        >
+          <div
+            style={{
+              background: '#111122',
+              padding: '36px 28px',
+              borderRadius: '12px',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+              color: '#ffffff',
+              minWidth: '320px'
+            }}
+          >
+            <h2
+              style={{
+                margin: '0 0 18px 0',
+                fontSize: '24px',
+                textAlign: 'center',
+                color: '#00ff88',
+                fontWeight: 'bold'
+              }}
+            >
+              TANK BATTLE.IO
+            </h2>
+            <label
+              style={{
+                fontSize: '14px',
+                color: '#cccccc',
+                display: 'block',
+                marginBottom: '8px'
+              }}
+            >
+              Ingame Name
+            </label>
+            <input
+              autoFocus
+              value={playerName}
+              onChange={(e) => {
+                setPlayerName(e.target.value);
+                if (nameError) setNameError('');
+              }}
+              placeholder="Enter your name..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handlePlay();
+              }}
+              style={{
+                width: '100%',
+                boxSizing: 'border-box',
+                padding: '10px 12px',
+                borderRadius: '6px',
+                border: `1px solid ${nameError ? '#ff4444' : '#333355'}`,
+                background: '#0a0a1a',
+                color: '#ffffff',
+                fontSize: '16px',
+                outline: 'none',
+                marginBottom: nameError ? '6px' : '16px'
+              }}
+            />
+            {nameError && (
+              <p style={{ color: '#ff6666', fontSize: '13px', margin: '0 0 14px 0' }}>{nameError}</p>
+            )}
+            <button
+              onClick={handlePlay}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: '#00ff88',
+                color: '#000000',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              Play
+            </button>
+          </div>
+        </div>
+      )}
+      <div
+        id="phaser-game"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          overflow: 'hidden',
+          background: '#0a0a1a',
+          display: hasJoined ? 'block' : 'none'
+        }}
+      ></div>
+    </>
   );
 }
 
