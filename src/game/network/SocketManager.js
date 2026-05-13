@@ -7,32 +7,25 @@ class SocketManager {
     this.playerName = null;
   }
 
-  connect(url = 'http://localhost:3001') {
+  connect() {
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
+    // Connect directly to game server - CORS is already enabled
+    this.socket = io('http://localhost:3001', {
+      transports: ['websocket', 'polling']
+    });
 
-    this.socket = io(url);
-
-    // Register all stored listeners NOW (after socket is created, before connection completes)
     for (const [event, callback] of Object.entries(this.listeners)) {
       this.socket.on(event, callback);
-    }
-
-    // If socket already connected by the time we registered listeners, log it
-    if (this.socket.connected) {
-      console.log('SocketManager: already connected, id:', this.socket.id);
     }
 
     return this.socket;
   }
 
   on(event, callback) {
-    // Store the callback
     this.listeners[event] = callback;
-
-    // If socket exists, register immediately
     if (this.socket) {
       this.socket.on(event, callback);
     }
@@ -57,7 +50,7 @@ class SocketManager {
       this.socket.disconnect();
       this.socket = null;
     }
-    this.listeners = {};
+    // DON'T clear this.listeners — preserve callbacks across reconnects
   }
 
   get id() {

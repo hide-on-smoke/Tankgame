@@ -63,19 +63,24 @@ export default class Bullet extends Phaser.GameObjects.Graphics {
     if (!this.alive) return;
     this.alive = false;
 
-    // Impact effect
-    this.clear();
-    this.fillStyle(0xff8800, 1);
-    this.fillCircle(0, 0, 6);
+    // Create impact effect as separate graphics object
+    const impact = this.scene.add.graphics();
+    impact.fillStyle(0xff8800, 1);
+    impact.fillCircle(this.x, this.y, 6);
 
     this.scene.tweens.add({
-      targets: this,
+      targets: impact,
       alpha: 0,
+      x: this.x,
+      y: this.y,
       scaleX: 2,
       scaleY: 2,
       duration: 100,
-      onComplete: () => this.destroy()
+      onComplete: () => impact.destroy()
     });
+
+    // Hide the bullet immediately
+    this.clear();
   }
 
   destroy() {
