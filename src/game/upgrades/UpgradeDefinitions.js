@@ -14,46 +14,45 @@ const UPGRADE_POOL = [
     key: 'damage',
     label: 'Damage',
     icon: '🔥',
-    desc: '+5 Damage',
-    apply: (tank) => { tank.damage = (tank.damage || 10) + 5; }
+    desc: '+4 Damage',
+    apply: (tank) => { tank.damage = (tank.damage || 10) + 4; }
   },
   {
     key: 'hp',
     label: 'Max HP',
     icon: '❤️',
-    desc: '+20 Max HP',
+    desc: '+15 Max HP',
     apply: (tank) => {
-      tank.maxHealth += 20;
-      tank.health = Math.min(tank.health + 20, tank.maxHealth);
+      tank.maxHealth += 15;
+      tank.health = Math.min(tank.health + 15, tank.maxHealth);
     }
   },
   {
     key: 'speed',
     label: 'Move Speed',
     icon: '⚡',
-    desc: '+30 Speed, +20 Rotate +10% Bullet Spd',
+    desc: '+20 Speed, +15 Rotate',
     apply: (tank) => {
-      tank.speed = (tank.speed || 160) + 30;
-      tank.rotationSpeed = (tank.rotationSpeed || 180) + 20;
-      tank.bulletSpeed = (tank.bulletSpeed || 400) + 40;
+      tank.speed = (tank.speed || 160) + 20;
+      tank.rotationSpeed = (tank.rotationSpeed || 180) + 15;
     }
   },
   {
     key: 'firerate',
     label: 'Fire Rate',
     icon: '🚀',
-    desc: 'Faster firing',
+    desc: '-30ms Fire Rate',
     apply: (tank) => {
-      tank.fireRate = Math.max(80, (tank.fireRate || 300) - 25);
+      tank.fireRate = Math.max(100, (tank.fireRate || 600) - 30);
     }
   },
   {
     key: 'regen',
     label: 'HP Regen',
     icon: '💚',
-    desc: '+2 HP/s Regen',
+    desc: '+1.5 HP/s Regen',
     apply: (tank) => {
-      tank.regenPerSecond = (tank.regenPerSecond || 0) + 2;
+      tank.regenPerSecond = (tank.regenPerSecond || 0) + 1.5;
     }
   },
   {
@@ -72,6 +71,15 @@ const UPGRADE_POOL = [
     desc: '+1 Bullet',
     apply: (tank) => {
       tank.bulletCount = Math.min((tank.bulletCount || 1) + 1, tank.maxBullets || 3);
+    }
+  },
+  {
+    key: 'bulletspeed',
+    label: 'Bullet Speed',
+    icon: '💨',
+    desc: '+50 Bullet Speed',
+    apply: (tank) => {
+      tank.bulletSpeed = (tank.bulletSpeed || 400) + 50;
     }
   },
   // ========== Add new upgrades below this line ==========

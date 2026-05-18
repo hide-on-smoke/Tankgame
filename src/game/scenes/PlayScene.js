@@ -39,6 +39,29 @@ export default class PlayScene extends Phaser.Scene {
       this._createMinimap();
       this._setupInput();
 
+      // Load all sounds
+      this.load.audio('explosion', '/src/assets/explosion.wav');
+      this.load.audio('background_music', '/src/assets/battle_music.ogg');
+      this.load.audio('sad_game_over', '/src/assets/sad_game_over.wav');
+      this.load.audio('levelup', '/src/assets/levelup_short.mp3');
+      this.load.audio('collect_points', '/src/assets/collect_points.mp3');
+      this.load.audio('select', '/src/assets/select.mp3');
+      
+      this.load.once('complete', () => {
+        this.explosionSound = this.sound.add('explosion', { volume: 0.5 });
+        this.backgroundMusic = this.sound.add('background_music', { volume: 0.4, loop: true });
+        this.sadGameOverSound = this.sound.add('sad_game_over', { volume: 0.5 });
+        this.levelupSound = this.sound.add('levelup', { volume: 0.5 });
+        this.collectPointsSound = this.sound.add('collect_points', { volume: 0.4 });
+        this.selectSound = this.sound.add('select', { volume: 0.5 });
+        
+        // Start background music
+        if (this.backgroundMusic) {
+          this.backgroundMusic.play();
+        }
+      });
+      this.load.start();
+
       // Start with minimal sockets to avoid freeze
       this._setupSockets();
       this._createUI();
@@ -66,7 +89,8 @@ export default class PlayScene extends Phaser.Scene {
     if (this._joinSent) return;
     this._joinSent = true;
     const name = window.__playerName;
-    if (name) socketManager.emit('join', { name });
+    const tankType = window.__tankType || 5;
+    if (name) socketManager.emit('join', { name, tankType });
   }
 
   _drawBackground() {
@@ -139,7 +163,21 @@ export default class PlayScene extends Phaser.Scene {
     socketManager.on('tankDied', (data) => {
       if (!data) return;
       const { id } = data;
-      if (this.tanks[id]) this.tanks[id].die();
+      if (this.tanks[id]) {
+        this.tanks[id].die();
+        // Play explosion sound if it's my tank or nearby
+        this._playExplosionSound(id);
+        // Play sad game over sound if it's my tank and return to menu
+        if (id === this.myId) {
+          this._playSadGameOver();
+          // Return to menu after 2 seconds
+          this.time.delayedCall(2000, () => {
+            window.__returnToMenu = true;
+            this.scene.stop();
+            this.game.destroy(true);
+          });
+        }
+      }
     });
 
     socketManager.on('playerRespawned', (data) => {
@@ -199,6 +237,7 @@ export default class PlayScene extends Phaser.Scene {
         this.myExp = data.exp;
         this.myNextLevelExp = data.nextLevelExp;
         this.pendingUpgrades.push(true);
+        this._playLevelUp();
       }
     });
 
@@ -252,6 +291,28 @@ export default class PlayScene extends Phaser.Scene {
         this.tanks[id].setNetworkTarget(pd.x, pd.y, pd.angle);
         if (pd.name) this.tanks[id].setName(pd.name);
         if (pd.level) this.tanks[id].setLevel(pd.level);
+        if (pd.tankType && this.tanks[id].tankType !== pd.tankType) {
+          this.tanks[id].tankType = pd.tankType;
+          this.tanks[id]._createGraphics();
+          if (this.tanks[id].body) {
+            this.tanks[id].body.setCircle(this.tanks[id].size / 2, -this.tanks[id].size / 2, -this.tanks[id].size / 2);
+          }
+          console.log(`Updated tank ${id} to type ${pd.tankType}`);
+        }
+        // Update stats for my tank too
+        if (this.tanks[id].isMine) {
+          if (typeof pd.health === 'number') this.tanks[id].health = pd.health;
+          if (typeof pd.maxHealth === 'number') this.tanks[id].maxHealth = pd.maxHealth;
+          if (typeof pd.damage === 'number') this.tanks[id].damage = pd.damage;
+          if (typeof pd.speed === 'number') this.tanks[id].speed = pd.speed;
+          if (typeof pd.fireRate === 'number') this.tanks[id].fireRate = pd.fireRate;
+          if (typeof pd.regenPerSecond === 'number') this.tanks[id].regenPerSecond = pd.regenPerSecond;
+          if (typeof pd.bulletCount === 'number') this.tanks[id].bulletCount = pd.bulletCount;
+          if (typeof pd.bulletSpeed === 'number') this.tanks[id].bulletSpeed = pd.bulletSpeed;
+          if (typeof pd.armor === 'number') this.tanks[id].armor = pd.armor;
+          if (typeof pd.rotationSpeed === 'number') this.tanks[id].rotationSpeed = pd.rotationSpeed;
+          if (typeof pd.size === 'number') this.tanks[id].size = pd.size;
+        }
         if (!this.tanks[id].isMine) {
           if (typeof pd.health === 'number') this.tanks[id].health = pd.health;
           if (typeof pd.maxHealth === 'number') this.tanks[id].maxHealth = pd.maxHealth;
@@ -263,6 +324,7 @@ export default class PlayScene extends Phaser.Scene {
           if (typeof pd.bulletSpeed === 'number') this.tanks[id].bulletSpeed = pd.bulletSpeed;
           if (typeof pd.armor === 'number') this.tanks[id].armor = pd.armor;
           if (typeof pd.rotationSpeed === 'number') this.tanks[id].rotationSpeed = pd.rotationSpeed;
+          if (typeof pd.size === 'number') this.tanks[id].size = pd.size;
           if (pd.upgradeHistory) this.tanks[id].upgradeHistory = pd.upgradeHistory;
         }
         this.tanks[id]._drawHealthBar();
@@ -271,7 +333,9 @@ export default class PlayScene extends Phaser.Scene {
         if (this.tanks[id]) continue;
         const isMine = id === socketManager.id;
         const isBot = pd.isBot === true;
-        const tank = new Tank(this, pd.x, pd.y, id, isMine, null, pd.name, pd.level, isBot);
+        // For my tank, use the selected tankType from window, otherwise use server's tankType
+        const tankType = isMine ? (window.__tankType || 5) : (pd.tankType || 5);
+        const tank = new Tank(this, pd.x, pd.y, id, isMine, null, pd.name, pd.level, isBot, tankType);
         tank.setAngle(pd.angle || 0);
         if (typeof pd.health === 'number') tank.health = pd.health;
         if (!isMine) {
@@ -284,6 +348,7 @@ export default class PlayScene extends Phaser.Scene {
           if (typeof pd.armor === 'number') tank.armor = pd.armor;
           if (typeof pd.rotationSpeed === 'number') tank.rotationSpeed = pd.rotationSpeed;
           if (typeof pd.maxHealth === 'number') tank.maxHealth = pd.maxHealth;
+          if (typeof pd.size === 'number') tank.size = pd.size;
           if (pd.upgradeHistory) tank.upgradeHistory = pd.upgradeHistory;
         }
         this.tanks[id] = tank;
@@ -292,7 +357,7 @@ export default class PlayScene extends Phaser.Scene {
           this.cameras.main.startFollow(tank, true, 0.08, 0.08);
           this.cameras.main.setZoom(1);
           this.minimap.startFollow(tank, true);
-          console.log('My tank:', id, 'at', pd.x, pd.y);
+          console.log('My tank:', id, 'at', pd.x, pd.y, 'type:', tankType);
         } else {
           console.log('Other tank:', id, 'at', pd.x, pd.y);
         }
@@ -522,6 +587,7 @@ export default class PlayScene extends Phaser.Scene {
     const myTank = this.myId ? this.tanks[this.myId] : null;
     if (myTank) {
       myTank.applyUpgrade(key);
+      this._playSelect();
       if (this.myId) {
         socketManager.emit('playerUpgradeChosen', {
           key: key,
@@ -597,7 +663,8 @@ export default class PlayScene extends Phaser.Scene {
     const myTank = this.myId ? this.tanks[this.myId] : null;
     if (!myTank) return;
     const { W, S, A, D, up, down, left, right, SPACE } = this.controls;
-    const { moveSpeed, rotateSpeed } = this.config;
+    const moveSpeed = myTank.speed || this.config.moveSpeed;
+    const rotateSpeed = myTank.rotationSpeed || this.config.rotateSpeed;
     const delta = this.game.loop.delta / 1000;
     let rotated = false, moved = false;
     if (left.isDown || A.isDown) { myTank.angle -= rotateSpeed * delta; rotated = true; }
@@ -647,6 +714,14 @@ export default class PlayScene extends Phaser.Scene {
     const dist = Phaser.Math.Distance.Between(bullet.x, bullet.y, myTank.x, myTank.y);
     if (dist < 40) {
       bullet.onHit();
+      // Check if this bullet killed the tank (health <= 0)
+      if (myTank.health <= 0) {
+        // Play collect/kill sound for the shooter
+        const shooterTank = this.tanks[bullet.ownerId];
+        if (shooterTank && shooterTank.isMine) {
+          this._playCollectPoints();
+        }
+      }
     }
   }
 
@@ -681,6 +756,60 @@ export default class PlayScene extends Phaser.Scene {
     this.xpBarFill.fillStyle(color, 1);
     if (fillW > 0) this.xpBarFill.fillRoundedRect(this.xpBarX, this.xpBarY, fillW, this.xpBarHeight, 6);
     this.xpBarText.setText(`Lv. ${this.myLevel} — ${this.myExp} / ${this.myNextLevelExp} XP`);
+  }
+
+  _playExplosionSound(tankId) {
+    if (!this.explosionSound) return;
+    
+    const myTank = this.myId ? this.tanks[this.myId] : null;
+    const deadTank = this.tanks[tankId];
+    
+    if (!myTank || !deadTank) return;
+    
+    // Play if it's my tank or if the dead tank is nearby (within 500 pixels)
+    const isMyTank = tankId === this.myId;
+    const distance = Phaser.Math.Distance.Between(myTank.x, myTank.y, deadTank.x, deadTank.y);
+    const isNearby = distance < 500;
+    
+    if (isMyTank || isNearby) {
+      // Adjust volume based on distance
+      let volume = 0.5;
+      if (!isMyTank) {
+        volume = 0.5 * (1 - distance / 500);
+      }
+      this.explosionSound.setVolume(Math.max(0.1, volume));
+      this.explosionSound.play();
+    }
+  }
+
+  _playSadGameOver() {
+    if (!this.sadGameOverSound) return;
+    // Stop background music when sad music plays
+    if (this.backgroundMusic && this.backgroundMusic.isPlaying) {
+      this.backgroundMusic.stop();
+    }
+    this.sadGameOverSound.play({ duration: 2000 }); // Limit to 2 seconds
+    // Resume background music after 2 seconds
+    this.time.delayedCall(2000, () => {
+      if (this.backgroundMusic) {
+        this.backgroundMusic.play();
+      }
+    });
+  }
+
+  _playLevelUp() {
+    if (!this.levelupSound) return;
+    this.levelupSound.play();
+  }
+
+  _playCollectPoints() {
+    if (!this.collectPointsSound) return;
+    this.collectPointsSound.play();
+  }
+
+  _playSelect() {
+    if (!this.selectSound) return;
+    this.selectSound.play();
   }
 
   destroy() {

@@ -43,17 +43,17 @@ function logOnce(msg) {
 }
 
 const BOT_UPGRADE_POOL = [
-  { key: 'damage', apply: (p) => { p.damage = (p.damage || 10) + 5; } },
-  { key: 'hp', apply: (p) => { p.maxHealth += 20; p.health = Math.min((p.health || 100) + 20, p.maxHealth); } },
+  { key: 'damage', apply: (p) => { p.damage = (p.damage || 10) + 4; } },
+  { key: 'hp', apply: (p) => { p.maxHealth += 15; p.health = Math.min((p.health || 100) + 15, p.maxHealth); } },
   { key: 'speed', apply: (p) => {
-    p.speed = (p.speed || 130) + 20;
-    p.rotationSpeed = (p.rotationSpeed || 160) + 15;
-    p.bulletSpeed = (p.bulletSpeed || 400) + 40;
+    p.speed = (p.speed || 160) + 20;
+    p.rotationSpeed = (p.rotationSpeed || 180) + 15;
   }},
-  { key: 'firerate', apply: (p) => { p.fireRate = Math.max(200, (p.fireRate || 500) - 40); }},
-  { key: 'regen', apply: (p) => { p.regenPerSecond = (p.regenPerSecond || 0) + 2; }},
+  { key: 'firerate', apply: (p) => { p.fireRate = Math.max(100, (p.fireRate || 600) - 30); }},
+  { key: 'regen', apply: (p) => { p.regenPerSecond = (p.regenPerSecond || 0) + 1.5; }},
   { key: 'armor', apply: (p) => { p.armor = (p.armor || 0) + 1; }},
   { key: 'multishot', apply: (p) => { p.bulletCount = Math.min((p.bulletCount || 1) + 1, 3); }},
+  { key: 'bulletspeed', apply: (p) => { p.bulletSpeed = (p.bulletSpeed || 400) + 50; }},
 ];
 
 function applyBotUpgrade(p) {
@@ -109,15 +109,56 @@ function spawnPlayer(socketId, isBot) {
   return { x, y, level: isBot ? randomBotLevel() : 1 };
 }
 
-function createPlayerData(socketId, spawnPos, name, isBot) {
+function createPlayerData(socketId, spawnPos, name, isBot, tankType = 5) {
+  const level = spawnPos.level;
+  let nextLevelExp;
+  if (level === 1) {
+    nextLevelExp = 1;
+  } else if (level === 2) {
+    nextLevelExp = 3;
+  } else {
+    nextLevelExp = level;
+  }
+  
+  // Base stats by tank type
+  const typeStats = {
+    1: { // Defender - High HP/Armor, Slow speed
+      health: 150, maxHealth: 150, damage: 18, speed: 120, rotationSpeed: 140, fireRate: 700,
+      regenPerSecond: 2, bulletCount: 1, bulletSpeed: 350, armor: 3, size: 115
+    },
+    2: { // Speedster - High speed, Low HP
+      health: 80, maxHealth: 80, damage: 15, speed: 220, rotationSpeed: 220, fireRate: 500,
+      regenPerSecond: 1, bulletCount: 1, bulletSpeed: 500, armor: 0, size: 96
+    },
+    3: { // Destroyer - High damage, Slow
+      health: 110, maxHealth: 110, damage: 30, speed: 110, rotationSpeed: 120, fireRate: 800,
+      regenPerSecond: 1, bulletCount: 1, bulletSpeed: 380, armor: 1, size: 134
+    },
+    4: { // Healer - High regen, Support
+      health: 100, maxHealth: 100, damage: 12, speed: 150, rotationSpeed: 160, fireRate: 550,
+      regenPerSecond: 5, bulletCount: 1, bulletSpeed: 420, armor: 1, size: 114
+    },
+    5: { // Balanced - All-around
+      health: 100, maxHealth: 100, damage: 20, speed: 160, rotationSpeed: 180, fireRate: 600,
+      regenPerSecond: 1.5, bulletCount: 1, bulletSpeed: 400, armor: 1, size: 104
+    }
+  };
+  
+  const stats = typeStats[tankType] || typeStats[5];
+  
   return {
     id: socketId, name,
     x: spawnPos.x, y: spawnPos.y, angle: Math.random() * 360,
     kills: 0, deaths: 0, score: 0, exp: 0,
-    level: spawnPos.level, nextLevelExp: spawnPos.level * 3,
-    health: isBot ? 50 : 100, maxHealth: isBot ? 50 : 100, damage: isBot ? 5 : 20, speed: 130,
-    rotationSpeed: isBot ? 240 : 160, fireRate: isBot ? 1000 : 600, regenPerSecond: 1,
-    bulletCount: 1, bulletSpeed: 500, armor: 0, alive: true,
+    level: level, nextLevelExp: nextLevelExp,
+    tankType: tankType,
+    health: isBot ? 50 : stats.health, maxHealth: isBot ? 50 : stats.maxHealth,
+    damage: isBot ? 5 : stats.damage, speed: isBot ? 130 : stats.speed,
+    rotationSpeed: isBot ? 240 : stats.rotationSpeed, fireRate: isBot ? 1000 : stats.fireRate,
+    regenPerSecond: isBot ? 1 : stats.regenPerSecond,
+    bulletCount: 1, bulletSpeed: isBot ? 400 : stats.bulletSpeed,
+    armor: isBot ? 0 : stats.armor, size: isBot ? 60 : stats.size,
+    alive: true,
     upgradeHistory: [], lastRespawn: Date.now(), isBot,
     _targetId: null, _lastFire: 0, _nextDecision: 0, _dodgeDir: 1, _lastHurt: 0,
   };
@@ -284,7 +325,14 @@ function checkCollisions() {
               while (owner.exp >= owner.nextLevelExp) {
                 owner.exp -= owner.nextLevelExp;
                 owner.level++;
-                owner.nextLevelExp = owner.level * 3;
+                // Calculate next level exp based on new level
+                if (owner.level === 2) {
+                  owner.nextLevelExp = 1;
+                } else if (owner.level === 3) {
+                  owner.nextLevelExp = 3;
+                } else {
+                  owner.nextLevelExp = owner.level;
+                }
                 queueBatch('levelUp', { id: owner.id, level: owner.level, exp: owner.exp, nextLevelExp: owner.nextLevelExp });
               }
             }
@@ -307,21 +355,40 @@ function checkCollisions() {
                 p._lastHurt = 0;
                 if (isBot) {
                   const nl = randomBotLevel();
-                  p.level = nl; p.nextLevelExp = nl * 3; p.exp = 0;
+                  p.level = nl;
+                  // Calculate next level exp based on level
+                  if (nl === 1) {
+                    p.nextLevelExp = 1;
+                  } else if (nl === 2) {
+                    p.nextLevelExp = 3;
+                  } else {
+                    p.nextLevelExp = nl;
+                  }
+                  p.exp = 0;
                   p.damage = 5; p.maxHealth = 50; p.health = 50;
                   p.speed = 130; p.rotationSpeed = 240; p.fireRate = 1000;
                   p.regenPerSecond = 1; p.bulletCount = 1; p.bulletSpeed = 500;
                   p.armor = 0; p.upgradeHistory = [];
                   applyRandomUpgradesForLevel(p, nl);
                 } else {
-                  // Reset human player to default stats on death
-                  p.level = 1; p.nextLevelExp = 3; p.exp = 0;
-                  p.damage = 20; p.maxHealth = 100; p.health = 100;
-                  p.speed = 130; p.rotationSpeed = 160; p.fireRate = 600;
-                  p.regenPerSecond = 1; p.bulletCount = 1; p.bulletSpeed = 500;
-                  p.armor = 0; p.upgradeHistory = [];
+                  // Reset human player to default stats on death (preserve tank type)
+                  const tankType = p.tankType || 5;
+                  const typeStats = {
+                    1: { health: 150, maxHealth: 150, damage: 18, speed: 120, rotationSpeed: 140, fireRate: 700, regenPerSecond: 2, bulletCount: 1, bulletSpeed: 350, armor: 3, size: 115 },
+                    2: { health: 80, maxHealth: 80, damage: 15, speed: 220, rotationSpeed: 220, fireRate: 500, regenPerSecond: 1, bulletCount: 1, bulletSpeed: 500, armor: 0, size: 96 },
+                    3: { health: 110, maxHealth: 110, damage: 30, speed: 110, rotationSpeed: 120, fireRate: 800, regenPerSecond: 1, bulletCount: 1, bulletSpeed: 380, armor: 1, size: 134 },
+                    4: { health: 100, maxHealth: 100, damage: 12, speed: 150, rotationSpeed: 160, fireRate: 550, regenPerSecond: 5, bulletCount: 1, bulletSpeed: 420, armor: 1, size: 114 },
+                    5: { health: 100, maxHealth: 100, damage: 20, speed: 160, rotationSpeed: 180, fireRate: 600, regenPerSecond: 1.5, bulletCount: 1, bulletSpeed: 400, armor: 1, size: 104 }
+                  };
+                  const stats = typeStats[tankType] || typeStats[5];
+                  p.level = 1; p.nextLevelExp = 1; p.exp = 0;
+                  p.tankType = tankType;
+                  p.damage = stats.damage; p.maxHealth = stats.maxHealth; p.health = stats.maxHealth;
+                  p.speed = stats.speed; p.rotationSpeed = stats.rotationSpeed; p.fireRate = stats.fireRate;
+                  p.regenPerSecond = stats.regenPerSecond; p.bulletCount = stats.bulletCount; p.bulletSpeed = stats.bulletSpeed;
+                  p.armor = stats.armor; p.size = stats.size; p.upgradeHistory = [];
                 }
-                queueBatch('respawn', { id: t.id, x: sp.x, y: sp.y, level: p.level, exp: p.exp, nextLevelExp: p.nextLevelExp, damage: p.damage, maxHealth: p.maxHealth, speed: p.speed, rotationSpeed: p.rotationSpeed, fireRate: p.fireRate, regenPerSecond: p.regenPerSecond, bulletCount: p.bulletCount, bulletSpeed: p.bulletSpeed, armor: p.armor, upgradeHistory: p.upgradeHistory });
+                queueBatch('respawn', { id: t.id, x: sp.x, y: sp.y, level: p.level, exp: p.exp, nextLevelExp: p.nextLevelExp, damage: p.damage, maxHealth: p.maxHealth, speed: p.speed, rotationSpeed: p.rotationSpeed, fireRate: p.fireRate, regenPerSecond: p.regenPerSecond, bulletCount: p.bulletCount, bulletSpeed: p.bulletSpeed, armor: p.armor, tankType: p.tankType, size: p.size, upgradeHistory: p.upgradeHistory });
                 queueBatch('leaderboard', buildLeaderboard());
               }
             }, delay);
@@ -338,6 +405,9 @@ function checkCollisions() {
 function sanitize(p) {
   const c = { ...p };
   delete c._targetId; delete c._lastFire; delete c._nextDecision; delete c._dodgeDir; delete c._lastHurt;
+  // Ensure tankType and size are included
+  if (p.tankType) c.tankType = p.tankType;
+  if (p.size) c.size = p.size;
   return c;
 }
 
@@ -366,7 +436,7 @@ setInterval(checkCollisions, COLLISION_TICK);
 
 io.on('connection', (socket) => {
   const sp = spawnPlayer(socket.id, false);
-  world.players[socket.id] = createPlayerData(socket.id, sp, generateName(), false);
+  world.players[socket.id] = createPlayerData(socket.id, sp, generateName(), false, 5); // Default to type 5 initially
   ensureBotCount();
 
   console.log(`[CONNECT] ${socket.id} joins. Total: ${Object.keys(world.players).length}`);
@@ -383,8 +453,31 @@ io.on('connection', (socket) => {
 
   socket.on('join', (data) => {
     const name = data && data.name ? String(data.name).trim() : '';
+    const tankType = data && data.tankType ? data.tankType : 5;
+    socket.tankType = tankType;
     if (name && world.players[socket.id]) {
       world.players[socket.id].name = name;
+      // Update tank type and recalculate stats
+      const typeStats = {
+        1: { health: 150, maxHealth: 150, damage: 18, speed: 120, rotationSpeed: 140, fireRate: 700, regenPerSecond: 2, bulletCount: 1, bulletSpeed: 350, armor: 3, size: 115 },
+        2: { health: 80, maxHealth: 80, damage: 15, speed: 220, rotationSpeed: 220, fireRate: 500, regenPerSecond: 1, bulletCount: 1, bulletSpeed: 500, armor: 0, size: 96 },
+        3: { health: 110, maxHealth: 110, damage: 30, speed: 110, rotationSpeed: 120, fireRate: 800, regenPerSecond: 1, bulletCount: 1, bulletSpeed: 380, armor: 1, size: 134 },
+        4: { health: 100, maxHealth: 100, damage: 12, speed: 150, rotationSpeed: 160, fireRate: 550, regenPerSecond: 5, bulletCount: 1, bulletSpeed: 420, armor: 1, size: 114 },
+        5: { health: 100, maxHealth: 100, damage: 20, speed: 160, rotationSpeed: 180, fireRate: 600, regenPerSecond: 1.5, bulletCount: 1, bulletSpeed: 400, armor: 1, size: 104 }
+      };
+      const stats = typeStats[tankType] || typeStats[5];
+      world.players[socket.id].tankType = tankType;
+      world.players[socket.id].health = stats.health;
+      world.players[socket.id].maxHealth = stats.maxHealth;
+      world.players[socket.id].damage = stats.damage;
+      world.players[socket.id].speed = stats.speed;
+      world.players[socket.id].rotationSpeed = stats.rotationSpeed;
+      world.players[socket.id].fireRate = stats.fireRate;
+      world.players[socket.id].regenPerSecond = stats.regenPerSecond;
+      world.players[socket.id].bulletCount = stats.bulletCount;
+      world.players[socket.id].bulletSpeed = stats.bulletSpeed;
+      world.players[socket.id].armor = stats.armor;
+      world.players[socket.id].size = stats.size;
       io.emit('leaderboardUpdate', buildLeaderboard());
     }
   });
