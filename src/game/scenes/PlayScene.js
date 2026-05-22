@@ -9,7 +9,7 @@ export default class PlayScene extends Phaser.Scene {
     super('PlayScene');
     this.tanks = {};
     this.bullets = {};
-    this.worldSize = { width: 3000, height: 3000 };
+    this.worldSize = { width: 2100, height: 2100 };
     this.config = { moveSpeed: 160, rotateSpeed: 180, fireRate: 600 };
     this.lastFireTime = 0;
     this.kills = 0;
@@ -264,11 +264,15 @@ export default class PlayScene extends Phaser.Scene {
       return;
     }
 
+    console.log('[WS] Socket ID:', socketId, 'Players in state:', Object.keys(state.players));
+    
     if (!this.myId && state.players[socketId]) {
       this.myId = socketId;
+      console.log('[WS] Set myId to:', this.myId);
     }
     if (this.myId && state.players && !state.players[this.myId] && socketManager.id && state.players[socketManager.id]) {
       this.myId = socketManager.id;
+      console.log('[WS] Updated myId to:', this.myId);
     }
 
     this.leaderboard = Object.values(state.players).map(p => ({
@@ -333,6 +337,7 @@ export default class PlayScene extends Phaser.Scene {
         if (this.tanks[id]) continue;
         const isMine = id === socketManager.id;
         const isBot = pd.isBot === true;
+        console.log('[WS] Creating tank - ID:', id, 'isMine:', isMine, 'isBot:', isBot, 'socketId:', socketId);
         // For my tank, use the selected tankType from window, otherwise use server's tankType
         const tankType = isMine ? (window.__tankType || 5) : (pd.tankType || 5);
         const tank = new Tank(this, pd.x, pd.y, id, isMine, null, pd.name, pd.level, isBot, tankType);
