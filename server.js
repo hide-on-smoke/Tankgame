@@ -8,7 +8,7 @@ const io = new Server(httpServer, {
 
 const WORLD_WIDTH = 2100;
 const WORLD_HEIGHT = 2100;
-const BOT_COUNT = 10;
+const BOT_COUNT = 2;
 const BOT_RESPAWN_DELAY = 2000;
 const BULLET_LIFETIME = 2000;
 

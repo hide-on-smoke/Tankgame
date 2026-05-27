@@ -754,32 +754,64 @@ export default class Tank extends Phaser.GameObjects.Container {
   }
 
   _createHealthBar() {
-    // Health bar background
-    this.healthBarBg = this.scene.add.graphics();
-    this.healthBarBg.fillStyle(0x333333, 0.8);
-    this.healthBarBg.fillRect(-22, -30, 44, 5);
-    this.add(this.healthBarBg);
+    // ========================================
+    // PHẦN 3: THANH MÁU & THÔNG TIN - SCI-FI STYLE
+    // ========================================
+    
+    // Container cho thanh máu và tên (để giữ nguyên orientation)
+    this.healthBarContainer = this.scene.add.container(0, 0);
+    this.add(this.healthBarContainer);
 
-    // Health bar fill
-    this.healthBar = this.scene.add.graphics();
-    this._drawHealthBar();
-    this.add(this.healthBar);
-
-    // Name tag
-    this.nameTag = this.scene.add.text(0, -38, this.tankName, {
+    // Tên người chơi và Cấp độ - màu trắng, font Orbitron, căn giữa
+    this.nameTag = this.scene.add.text(0, -55, `${this.tankName} [Lv.${this.tankLevel}]`, {
       fontSize: '14px',
       color: '#ffffff',
-      fontFamily: 'Arial',
+      fontFamily: 'Orbitron',
+      fontStyle: 'bold',
       stroke: '#000000',
-      strokeThickness: 3
+      strokeThickness: 4,
+      shadow: {
+        offsetX: 0,
+        offsetY: 0,
+        color: '#00F5FF',
+        blur: 5,
+        stroke: false,
+        fill: true
+      }
     }).setOrigin(0.5, 0.5);
-    this.add(this.nameTag);
+    this.healthBarContainer.add(this.nameTag);
+
+    // Nền thanh máu - màu xám đen mờ (rgba)
+    this.healthBarBg = this.scene.add.graphics();
+    this.healthBarBg.fillStyle(0x1a1a2e, 0.8);
+    // Vẽ nền thanh máu với viền mỏng trong suốt
+    const barWidth = 50;
+    const barHeight = 6;
+    const barX = -barWidth / 2;
+    const barY = -38;
+    
+    // Viền mỏng trong suốt bọc bên ngoài
+    this.healthBarBg.lineStyle(1, 0xffffff, 0.3);
+    this.healthBarBg.strokeRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+    // Nền thanh máu
+    this.healthBarBg.fillStyle(0x1a1a2e, 0.9);
+    this.healthBarBg.fillRect(barX, barY, barWidth, barHeight);
+    this.healthBarContainer.add(this.healthBarBg);
+
+    // Thanh máu hiển thị lượng HP hiện tại
+    this.healthBar = this.scene.add.graphics();
+    this.healthBarContainer.add(this.healthBar);
+    this._drawHealthBar();
   }
 
   setName(name) {
     if (!name || this.tankName === name) return;
     this.tankName = name;
-    if (this.nameTag) this.nameTag.setText(`${this.tankName} [Lv.${this.tankLevel}]`);
+    if (this.nameTag) {
+      this.nameTag.setText(`${this.tankName} [Lv.${this.tankLevel}]`);
+      // Cập nhật font sang Orbitron
+      this.nameTag.setFont('Orbitron');
+    }
   }
 
   setLevel(level) {
@@ -788,7 +820,9 @@ export default class Tank extends Phaser.GameObjects.Container {
     this.tankLevel = lv;
     if (this.nameTag) {
       this.nameTag.setText(`${this.tankName} [Lv.${this.tankLevel}]`);
-      this.nameTag.setPosition(0, -52);
+      this.nameTag.setPosition(0, -55);
+      // Đảm bảo font là Orbitron
+      this.nameTag.setFont('Orbitron');
     }
     // Redraw graphics to show level evolution
     this._createGraphics();
@@ -817,11 +851,41 @@ export default class Tank extends Phaser.GameObjects.Container {
   }
 
   _drawHealthBar() {
+    // ========================================
+    // HÀM VẼ THANH MÁU - SCI-FI / CYBERPUNK STYLE
+    // ========================================
+    
     this.healthBar.clear();
-    const healthPercent = this.health / this.maxHealth;
-    const barColor = healthPercent > 0.5 ? 0x00ff00 : healthPercent > 0.25 ? 0xffaa00 : 0xff0000;
-    this.healthBar.fillStyle(barColor, 1);
-    this.healthBar.fillRect(-22, -30, 44 * healthPercent, 5);
+    
+    // Tính phần trăm HP hiện tại
+    const healthPercent = Math.max(0, Math.min(1, this.health / this.maxHealth));
+    
+    // Màu thanh máu: Cyan nếu HP > 30%, Đỏ nếu HP <= 30%
+    const barColor = healthPercent > 0.3 ? 0x00F5FF : 0xFF4444;
+    
+    // Kích thước thanh máu
+    const barWidth = 50;
+    const barHeight = 6;
+    const barX = -barWidth / 2;
+    const barY = -38;
+    const fillWidth = barWidth * healthPercent;
+    
+    // Vẽ thanh máu với màu tương ứng
+    if (fillWidth > 0) {
+      this.healthBar.fillStyle(barColor, 1);
+      this.healthBar.fillRect(barX, barY, fillWidth, barHeight);
+      
+      // Thêm hiệu ứng phát sáng neon cho thanh máu
+      if (healthPercent > 0.3) {
+        // Hiệu ứng glow cho Cyan
+        this.healthBar.lineStyle(1, 0x00F5FF, 0.5);
+        this.healthBar.strokeRect(barX, barY, fillWidth, barHeight);
+      } else {
+        // Hiệu ứng glow cho Đỏ (danger)
+        this.healthBar.lineStyle(1, 0xFF4444, 0.5);
+        this.healthBar.strokeRect(barX, barY, fillWidth, barHeight);
+      }
+    }
   }
 
   takeDamage(amount) {
@@ -941,12 +1005,13 @@ export default class Tank extends Phaser.GameObjects.Container {
       }
     }
 
-    // Keep health bar elements positioned correctly
-    this.healthBarBg.setPosition(0, 0);
-    this.healthBar.setPosition(0, 0);
-    this.nameTag.setPosition(0, -38);
-    // Keep name tag upright (counteract tank rotation)
-    this.nameTag.setRotation(-Phaser.Math.DegToRad(this.angle));
+    // ========================================
+    // GIỮ THANH MÁU LUÔN THẲNG ĐỨNG (KHÔNG XOAY THEO TANK)
+    // ========================================
+    if (this.healthBarContainer) {
+      // Đảo ngược rotation của tank để container luôn thẳng đứng
+      this.healthBarContainer.setRotation(-Phaser.Math.DegToRad(this.angle));
+    }
   }
 
   destroy() {

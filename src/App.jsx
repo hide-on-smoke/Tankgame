@@ -112,53 +112,19 @@ function App() {
   return (
     <>
       {!hasJoined && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.7)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            fontFamily: 'Arial, sans-serif'
-          }}
-        >
-          <div
-            style={{
-              background: '#111122',
-              padding: '36px 28px',
-              borderRadius: '12px',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-              color: '#ffffff',
-              minWidth: '320px'
-            }}
-          >
-            <h2
-              style={{
-                margin: '0 0 18px 0',
-                fontSize: '24px',
-                textAlign: 'center',
-                color: '#00ff88',
-                fontWeight: 'bold'
-              }}
-            >
+        <div className="menu-container">
+          <div className="menu-panel">
+            <h2 className="menu-title">
               {returningFromDeath ? 'YOU DIED' : 'TANK BATTLE.IO'}
             </h2>
             {!returningFromDeath && (
               <>
-                <label
-                  style={{
-                    fontSize: '14px',
-                    color: '#cccccc',
-                    display: 'block',
-                    marginBottom: '8px'
-                  }}
-                >
+                <label className="menu-label">
                   Ingame Name
                 </label>
                 <input
                   autoFocus
+                  className={`menu-input ${nameError ? 'error' : ''}`}
                   value={playerName}
                   onChange={(e) => {
                     setPlayerName(e.target.value);
@@ -168,100 +134,41 @@ function App() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handlePlay();
                   }}
-                  style={{
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    padding: '10px 12px',
-                    borderRadius: '6px',
-                    border: `1px solid ${nameError ? '#ff4444' : '#333355'}`,
-                    background: '#0a0a1a',
-                    color: '#ffffff',
-                    fontSize: '16px',
-                    outline: 'none',
-                    marginBottom: nameError ? '6px' : '16px'
-                  }}
                 />
                 {nameError && (
-                  <p style={{ color: '#ff6666', fontSize: '13px', margin: '0 0 14px 0' }}>{nameError}</p>
+                  <p className="error-message">{nameError}</p>
                 )}
               </>
             )}
             {returningFromDeath && (
-              <p
-                style={{
-                  fontSize: '14px',
-                  color: '#aaaaaa',
-                  textAlign: 'center',
-                  marginBottom: '16px'
-                }}
-              >
-                Playing as: <span style={{ color: '#00ff88', fontWeight: 'bold' }}>{playerName}</span>
+              <p className="tank-description">
+                Playing as: <span style={{ color: '#00F5FF', fontWeight: 'bold' }}>{playerName}</span>
               </p>
             )}
-            <label
-              style={{
-                fontSize: '14px',
-                color: '#cccccc',
-                display: 'block',
-                marginBottom: '8px'
-              }}
-            >
+            <label className="menu-label">
               Select Tank Type
             </label>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(5, 1fr)',
-                gap: '8px',
-                marginBottom: '16px'
-              }}
-            >
+            <div className="tank-selection-grid">
               {tankTypes.map((type) => (
                 <div
                   key={type.id}
+                  className={`tank-option ${selectedTankType === type.id ? 'selected' : ''}`}
                   onClick={() => setSelectedTankType(type.id)}
-                  style={{
-                    padding: '10px 4px',
-                    borderRadius: '6px',
-                    border: `2px solid ${selectedTankType === type.id ? '#00ff88' : '#333355'}`,
-                    background: selectedTankType === type.id ? '#0a2a1a' : '#0a0a1a',
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    transition: 'all 0.2s'
-                  }}
                   title={type.desc}
                 >
-                  <div style={{ fontSize: '24px', marginBottom: '4px' }}>{type.icon}</div>
-                  <div style={{ fontSize: '11px', color: selectedTankType === type.id ? '#00ff88' : '#888888' }}>
+                  <div className="tank-icon">{type.icon}</div>
+                  <div className="tank-name">
                     {type.name}
                   </div>
                 </div>
               ))}
             </div>
-            <div
-              style={{
-                fontSize: '12px',
-                color: '#888888',
-                textAlign: 'center',
-                marginBottom: '16px',
-                minHeight: '32px'
-              }}
-            >
+            <div className="tank-description">
               {tankTypes.find(t => t.id === selectedTankType)?.desc}
             </div>
             <button
+              className="play-button"
               onClick={handlePlay}
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '6px',
-                border: 'none',
-                background: '#00ff88',
-                color: '#000000',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
-              }}
             >
               Play
             </button>

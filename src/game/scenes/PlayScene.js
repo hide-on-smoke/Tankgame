@@ -95,27 +95,39 @@ export default class PlayScene extends Phaser.Scene {
 
   _drawBackground() {
     const { width, height } = this.worldSize;
-    this.cameras.main.setBackgroundColor('#1a1a2e');
+    // Màu nền xanh đen sâu theo yêu cầu
+    this.cameras.main.setBackgroundColor('#0B0E14');
+    
+    // Grid với màu Cyan mờ theo phong cách Sci-Fi
     const grid = this.add.graphics();
-    grid.lineStyle(1, 0x333355, 0.3);
+    grid.lineStyle(1, 0x00F5FF, 0.15);
     for (let i = 0; i <= width; i += 100) grid.lineBetween(i, 0, i, height);
     for (let j = 0; j <= height; j += 100) grid.lineBetween(0, j, width, j);
+    
     const sub = this.add.graphics();
-    sub.lineStyle(1, 0x222244, 0.15);
+    sub.lineStyle(1, 0x00BFFF, 0.08);
     for (let i = 0; i <= width; i += 25) if (i % 100 !== 0) sub.lineBetween(i, 0, i, height);
     for (let j = 0; j <= height; j += 25) if (j % 100 !== 0) sub.lineBetween(0, j, width, j);
+    
+    // Border với màu Cyan phát sáng
     const border = this.add.graphics();
-    border.lineStyle(4, 0xff4444, 0.8);
+    border.lineStyle(3, 0x00F5FF, 0.6);
     border.strokeRect(0, 0, width, height);
   }
 
   _createMinimap() {
     const { width, height } = this.worldSize;
+    // Minimap với nền Glassmorphism
     this.minimap = this.cameras.add(10, 10, 180, 180)
       .setZoom(180 / width)
-      .setBackgroundColor(0x111122)
+      .setBackgroundColor(0x0F172A)
       .setBounds(0, 0, width, height);
     this.minimap.setName('minimap');
+    
+    // Thêm viền Glassmorphism cho minimap
+    const minimapBorder = this.add.graphics().setScrollFactor(0).setDepth(98);
+    minimapBorder.lineStyle(2, 0x00F5FF, 0.4);
+    minimapBorder.strokeRoundedRect(8, 8, 184, 184, 8);
   }
 
   _setupInput() {
@@ -418,26 +430,41 @@ export default class PlayScene extends Phaser.Scene {
   }
 
   _createUI() {
+    // ========================================
+    // ÁP DỤNG GLASSMORPHISM CHO CÁC BẢNG UI
+    // ========================================
+    
     const W = this.scale.width;
     const H = this.scale.height;
+    
+    // Font Orbitron cho tất cả UI text
+    const uiFont = 'Orbitron';
+    
     this.scoreText = this.add.text(15, 200, '', {
-      fontSize: '18px', color: '#ffffff', fontFamily: 'Arial',
-      stroke: '#000000', strokeThickness: 3
+      fontSize: '16px', color: '#00F5FF', fontFamily: uiFont,
+      stroke: '#000000', strokeThickness: 3, fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(100);
+    
+    // Leaderboard với Glassmorphism
     this.leaderboardBg = this.add.graphics().setScrollFactor(0).setDepth(99);
     this.leaderboardText = this.add.text(15, 245, '', {
-      fontSize: '14px', color: '#ffffff', fontFamily: 'Arial',
+      fontSize: '13px', color: '#ffffff', fontFamily: uiFont,
       stroke: '#000000', strokeThickness: 2
     }).setScrollFactor(0).setDepth(100);
+    
     this.cooldownText = this.add.text(15, 165, '', {
-      fontSize: '13px', color: '#aaaaaa', fontFamily: 'Arial'
+      fontSize: '12px', color: '#00F5FF', fontFamily: uiFont,
+      fontStyle: 'bold'
     }).setScrollFactor(0).setDepth(100);
+    
     this.controlsHint = this.add.text(W / 2, H - 25, 'WASD / Arrows: Move | SPACE: Fire', {
-      fontSize: '13px', color: 'rgba(255,255,255,0.4)', fontFamily: 'Arial'
+      fontSize: '12px', color: 'rgba(0, 245, 255, 0.5)', fontFamily: uiFont
     }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(100);
+    
     this.titleText = this.add.text(W / 2, 20, '⚔ TANK BATTLE.IO', {
-      fontSize: '22px', color: '#00ff00', fontFamily: 'Arial',
-      stroke: '#000000', strokeThickness: 3, fontStyle: 'bold'
+      fontSize: '24px', color: '#00F5FF', fontFamily: uiFont,
+      stroke: '#000000', strokeThickness: 4, fontStyle: 'bold',
+      shadow: { blur: 10, color: '#00F5FF', fill: true }
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(100);
 
     this.xpBarY = H - 55;
@@ -447,20 +474,40 @@ export default class PlayScene extends Phaser.Scene {
     this.xpBarBg = this.add.graphics().setScrollFactor(0).setDepth(101);
     this.xpBarFill = this.add.graphics().setScrollFactor(0).setDepth(102);
     this.xpBarText = this.add.text(this.xpBarX + this.xpBarWidth / 2, this.xpBarY - 16, '', {
-      fontSize: '13px', color: '#ffffff', fontFamily: 'Arial',
-      stroke: '#000000', strokeThickness: 2
+      fontSize: '12px', color: '#ffffff', fontFamily: uiFont,
+      stroke: '#000000', strokeThickness: 2, fontStyle: 'bold'
     }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(103);
+    
+    // Character Stats với Glassmorphism
     this.statsBg = this.add.graphics().setScrollFactor(0).setDepth(99);
     this.statsText = this.add.text(15, 380, '', {
-      fontSize: '14px', color: '#ffffff', fontFamily: 'Arial',
+      fontSize: '12px', color: '#ffffff', fontFamily: uiFont,
       stroke: '#000000', strokeThickness: 2
     }).setScrollFactor(0).setDepth(100);
+    
+    // Upgrade History với Glassmorphism
     this.historyBg = this.add.graphics().setScrollFactor(0).setDepth(99);
     this.historyText = this.add.text(15, 380, '', {
-      fontSize: '13px', color: '#aaddff', fontFamily: 'Arial',
+      fontSize: '11px', color: '#00F5FF', fontFamily: uiFont,
       stroke: '#000000', strokeThickness: 1.5
     }).setScrollFactor(0).setDepth(100);
     this._upgradeChoiceContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(200);
+    
+    // Make minimap ignore all UI elements
+    this.minimap.ignore(this.scoreText);
+    this.minimap.ignore(this.leaderboardBg);
+    this.minimap.ignore(this.leaderboardText);
+    this.minimap.ignore(this.cooldownText);
+    this.minimap.ignore(this.controlsHint);
+    this.minimap.ignore(this.titleText);
+    this.minimap.ignore(this.xpBarBg);
+    this.minimap.ignore(this.xpBarFill);
+    this.minimap.ignore(this.xpBarText);
+    this.minimap.ignore(this.statsBg);
+    this.minimap.ignore(this.statsText);
+    this.minimap.ignore(this.historyBg);
+    this.minimap.ignore(this.historyText);
+    this.minimap.ignore(this._upgradeChoiceContainer);
   }
 
   _drawCharacterStats() {
@@ -474,8 +521,9 @@ export default class PlayScene extends Phaser.Scene {
     const spd = myTank ? myTank.speed || this.config.moveSpeed : this.config.moveSpeed;
     const dmg = myTank ? myTank.damage || 10 : 10;
     const armor = myTank ? myTank.armor || 0 : 0;
+    
     this.statsText.setText(
-      `📊 CHARACTER STATS\n` +
+      `⚡ CHARACTER STATS\n` +
       `Level: ${this.myLevel}\n` +
       `Exp: ${this.myExp}/${this.myNextLevelExp}\n` +
       `HP: ${hp} / ${maxHp} (+${regen}/s)\n` +
@@ -484,6 +532,19 @@ export default class PlayScene extends Phaser.Scene {
       `Fire Rate: ${fireRate}ms\n` +
       `Bullets: ${bullets}/3`
     );
+    
+    // Áp dụng Glassmorphism cho background stats
+    const bounds = this.statsText.getBounds();
+    if (bounds) {
+      this.statsBg.clear();
+      // Nền Glassmorphism: #0F172A với độ trong suốt 60%
+      this.statsBg.fillStyle(0x0F172A, 0.6);
+      this.statsBg.fillRoundedRect(bounds.x - 8, bounds.y - 8, bounds.width + 16, bounds.height + 16, 8);
+      // Viền mỏng trong suốt
+      this.statsBg.lineStyle(1, 0xffffff, 0.15);
+      this.statsBg.strokeRoundedRect(bounds.x - 8, bounds.y - 8, bounds.width + 16, bounds.height + 16, 8);
+    }
+    
     this._drawUpgradeHistory();
   }
 
@@ -507,9 +568,15 @@ export default class PlayScene extends Phaser.Scene {
     if (statsBounds) this.historyText.setPosition(15, statsBounds.y + statsBounds.height + 12);
     this.historyText.setText(text);
     const bounds = this.historyText.getBounds();
+    
+    // Áp dụng Glassmorphism cho background history
     this.historyBg.clear();
-    this.historyBg.fillStyle(0x000000, 0.4);
-    this.historyBg.fillRoundedRect(bounds.x - 5, bounds.y - 5, bounds.width + 10, bounds.height + 10, 4);
+    // Nền Glassmorphism: #0F172A với độ trong suốt 60%
+    this.historyBg.fillStyle(0x0F172A, 0.6);
+    this.historyBg.fillRoundedRect(bounds.x - 8, bounds.y - 8, bounds.width + 16, bounds.height + 16, 8);
+    // Viền mỏng trong suốt
+    this.historyBg.lineStyle(1, 0xffffff, 0.15);
+    this.historyBg.strokeRoundedRect(bounds.x - 8, bounds.y - 8, bounds.width + 16, bounds.height + 16, 8);
   }
 
   _showUpgradeChoices() {
@@ -525,29 +592,33 @@ export default class PlayScene extends Phaser.Scene {
     const gap = 10;
     const totalWidth = upgradeOptions.length * boxWidth + (upgradeOptions.length - 1) * gap;
     const startX = (W - totalWidth) / 2;
+    // Upgrade menu với Glassmorphism
     const barBg = this.add.graphics().setScrollFactor(0).setDepth(199);
-    barBg.fillStyle(0x000000, 0.6);
-    barBg.fillRoundedRect(startX - 8, boxY - 8, totalWidth + 16, boxHeight + 16, 10);
-    barBg.lineStyle(2, 0x00ff00, 0.6);
-    barBg.strokeRoundedRect(startX - 8, boxY - 8, totalWidth + 16, boxHeight + 16, 10);
+    // Nền Glassmorphism: #0F172A với độ trong suốt 60%
+    barBg.fillStyle(0x0F172A, 0.6);
+    barBg.fillRoundedRect(startX - 8, boxY - 8, totalWidth + 16, boxHeight + 16, 12);
+    // Viền mỏng trong suốt với hiệu ứng phát sáng Cyan
+    barBg.lineStyle(2, 0x00F5FF, 0.5);
+    barBg.strokeRoundedRect(startX - 8, boxY - 8, totalWidth + 16, boxHeight + 16, 12);
     this._upgradeMenuElements.push(barBg);
     const hintText = this.add.text(W / 2, boxY - 22, '⬆ LEVEL UP! Choose an upgrade:', {
-      fontSize: '14px', color: '#00ff00', fontFamily: 'Arial',
-      stroke: '#000000', strokeThickness: 2
+      fontSize: '14px', color: '#00F5FF', fontFamily: 'Orbitron',
+      stroke: '#000000', strokeThickness: 3, fontStyle: 'bold'
     }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(201);
     this._upgradeMenuElements.push(hintText);
     upgradeOptions.forEach((opt, idx) => {
       const bx = startX + idx * (boxWidth + gap);
       const by = boxY;
+      // Box cho từng option upgrade với Glassmorphism
       const boxBg = this.add.graphics().setScrollFactor(0).setDepth(200);
-      boxBg.fillStyle(0x1a1a3e, 0.95);
+      boxBg.fillStyle(0x0F172A, 0.7);
       boxBg.fillRoundedRect(bx, by, boxWidth, boxHeight, 8);
-      boxBg.lineStyle(2, 0x4488ff, 0.9);
+      boxBg.lineStyle(2, 0x00F5FF, 0.4);
       boxBg.strokeRoundedRect(bx, by, boxWidth, boxHeight, 8);
       this._upgradeMenuElements.push(boxBg);
       const keyHint = this.add.text(bx + 4, by + 2, `[${idx + 1}]`, {
-        fontSize: '11px', color: '#4488ff', fontFamily: 'Arial',
-        stroke: '#000000', strokeThickness: 1
+        fontSize: '11px', color: '#00F5FF', fontFamily: 'Orbitron',
+        stroke: '#000000', strokeThickness: 2, fontStyle: 'bold'
       }).setScrollFactor(0).setDepth(201);
       this._upgradeMenuElements.push(keyHint);
       const iconText = this.add.text(bx + boxWidth / 2, by + 22, opt.icon || '⬆', {
@@ -555,12 +626,12 @@ export default class PlayScene extends Phaser.Scene {
       }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(201);
       this._upgradeMenuElements.push(iconText);
       const labelText = this.add.text(bx + boxWidth / 2, by + 48, opt.label, {
-        fontSize: '13px', color: '#ffffff', fontFamily: 'Arial',
-        stroke: '#000000', strokeThickness: 2
+        fontSize: '12px', color: '#ffffff', fontFamily: 'Orbitron',
+        stroke: '#000000', strokeThickness: 2, fontStyle: 'bold'
       }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(201);
       this._upgradeMenuElements.push(labelText);
       const descText = this.add.text(bx + boxWidth / 2, by + 64, opt.desc, {
-        fontSize: '10px', color: '#aaaaaa', fontFamily: 'Arial',
+        fontSize: '10px', color: '#94a3b8', fontFamily: 'Orbitron',
         stroke: '#000000', strokeThickness: 1
       }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(201);
       this._upgradeMenuElements.push(descText);
@@ -648,9 +719,15 @@ export default class PlayScene extends Phaser.Scene {
           lbText += `${medal} ${entry.name || entry.id.slice(0, 6)}: ${entry.score || 0}\n`;
         });
         this.leaderboardText.setText(lbText);
+        
+        // Áp dụng Glassmorphism cho Leaderboard
         this.leaderboardBg.clear();
-        this.leaderboardBg.fillStyle(0x000000, 0.4);
-        this.leaderboardBg.fillRoundedRect(10, 240, 195, 20 + sorted.length * 18, 4);
+        // Nền Glassmorphism: #0F172A với độ trong suốt 60%
+        this.leaderboardBg.fillStyle(0x0F172A, 0.6);
+        this.leaderboardBg.fillRoundedRect(10, 240, 195, 20 + sorted.length * 18, 8);
+        // Viền mỏng trong suốt
+        this.leaderboardBg.lineStyle(1, 0xffffff, 0.15);
+        this.leaderboardBg.strokeRoundedRect(10, 240, 195, 20 + sorted.length * 18, 8);
       }
     }
     if (this.cooldownText) {
@@ -752,14 +829,28 @@ export default class PlayScene extends Phaser.Scene {
   _drawXPBar() {
     if (!this.xpBarBg || !this.xpBarFill || !this.xpBarText) return;
     this.xpBarBg.clear();
-    this.xpBarBg.fillStyle(0x333333, 0.85);
-    this.xpBarBg.fillRoundedRect(this.xpBarX, this.xpBarY, this.xpBarWidth, this.xpBarHeight, 6);
+    
+    // Nền thanh XP với Glassmorphism
+    this.xpBarBg.fillStyle(0x0F172A, 0.7);
+    this.xpBarBg.fillRoundedRect(this.xpBarX, this.xpBarY, this.xpBarWidth, this.xpBarHeight, 8);
+    // Viền mỏng trong suốt
+    this.xpBarBg.lineStyle(1, 0xffffff, 0.2);
+    this.xpBarBg.strokeRoundedRect(this.xpBarX, this.xpBarY, this.xpBarWidth, this.xpBarHeight, 8);
+    
     this.xpBarFill.clear();
     const pct = Math.max(0, Math.min(1, this.myExp / (this.myNextLevelExp || 1)));
     const fillW = Math.max(0, this.xpBarWidth * pct);
-    const color = pct >= 1 ? 0xffdd00 : 0x00ccff;
+    // Màu Cyan cho thanh XP theo phong cách Sci-Fi
+    const color = pct >= 1 ? 0xFFD700 : 0x00F5FF;
     this.xpBarFill.fillStyle(color, 1);
-    if (fillW > 0) this.xpBarFill.fillRoundedRect(this.xpBarX, this.xpBarY, fillW, this.xpBarHeight, 6);
+    if (fillW > 0) this.xpBarFill.fillRoundedRect(this.xpBarX, this.xpBarY, fillW, this.xpBarHeight, 8);
+    
+    // Hiệu ứng phát sáng cho thanh XP
+    if (fillW > 0) {
+      this.xpBarFill.lineStyle(1, color, 0.5);
+      this.xpBarFill.strokeRoundedRect(this.xpBarX, this.xpBarY, fillW, this.xpBarHeight, 8);
+    }
+    
     this.xpBarText.setText(`Lv. ${this.myLevel} — ${this.myExp} / ${this.myNextLevelExp} XP`);
   }
 

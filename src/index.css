@@ -1,3 +1,6 @@
+/* Import Google Fonts - Orbitron cho phong cách Sci-Fi/Cyberpunk */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&display=swap');
+
 * {
   margin: 0;
   padding: 0;
@@ -8,10 +11,215 @@ html, body, #root {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0a0a1a;
+  /* Màu nền xanh đen sâu theo yêu cầu */
+  background: #0B0E14;
+  font-family: 'Orbitron', sans-serif;
 }
 
 body {
   margin: 0;
   padding: 0;
+}
+
+/* ========================================
+   PHẦN 1: GIAO DIỆN BÊN NGOÀI - MENU & NÚT
+   ======================================== */
+
+/* Container chính của menu */
+.menu-container {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 14, 20, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+/* Panel menu chính */
+.menu-panel {
+  background: #0F172A;
+  padding: 40px 32px;
+  border-radius: 16px;
+  /* Hiệu ứng phát sáng neon mờ */
+  box-shadow: 
+    0 0 20px rgba(0, 245, 255, 0.1),
+    0 0 40px rgba(0, 191, 255, 0.05),
+    0 10px 30px rgba(0, 0, 0, 0.5);
+  color: #ffffff;
+  min-width: 360px;
+  /* Viền mỏng trong suốt */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Tiêu đề menu */
+.menu-title {
+  margin: 0 0 24px 0;
+  font-size: 28px;
+  text-align: center;
+  color: #00F5FF;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  /* Hiệu ứng phát sáng chữ */
+  text-shadow: 0 0 10px rgba(0, 245, 255, 0.5);
+}
+
+/* Label cho input */
+.menu-label {
+  font-size: 14px;
+  color: #94a3b8;
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 500;
+  letter-spacing: 1px;
+}
+
+/* Input field */
+.menu-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.8);
+  color: #ffffff;
+  font-size: 16px;
+  font-family: 'Orbitron', sans-serif;
+  outline: none;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+}
+
+.menu-input:focus {
+  border-color: #00F5FF;
+  box-shadow: 0 0 10px rgba(0, 245, 255, 0.3);
+}
+
+.menu-input.error {
+  border-color: #ff4444;
+  box-shadow: 0 0 10px rgba(255, 68, 68, 0.3);
+}
+
+/* Error message */
+.error-message {
+  color: #ff4444;
+  font-size: 13px;
+  margin: 0 0 16px 0;
+  font-weight: 500;
+}
+
+/* ========================================
+   NÚT PLAY - GRADIENT CYAN TO BLUE
+   ======================================== */
+
+.play-button {
+  width: 100%;
+  padding: 16px;
+  border-radius: 12px;
+  border: none;
+  /* Gradient từ Cyan (#00F5FF) sang Blue (#00BFFF) */
+  background: linear-gradient(135deg, #00F5FF 0%, #00BFFF 100%);
+  color: #0B0E14;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'Orbitron', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  /* Hiệu ứng phát sáng neon */
+  box-shadow: 
+    0 0 20px rgba(0, 245, 255, 0.4),
+    0 0 40px rgba(0, 191, 255, 0.2);
+}
+
+.play-button:hover {
+  /* To lên nhẹ khi hover */
+  transform: scale(1.05);
+  /* Tăng độ phát sáng */
+  box-shadow: 
+    0 0 30px rgba(0, 245, 255, 0.6),
+    0 0 50px rgba(0, 191, 255, 0.4);
+}
+
+.play-button:active {
+  transform: scale(0.98);
+}
+
+/* ========================================
+   PHẦN 2: GLASSMORPHISM CHO CÁC BẢNG UI
+   ======================================== */
+
+/* Class chung cho Glassmorphism */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.6); /* #0F172A với độ trong suốt 60% */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Áp dụng cho các container UI trong game */
+.ui-glass {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+/* Tank selection grid */
+.tank-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.tank-option {
+  padding: 12px 6px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.8);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.tank-option:hover {
+  border-color: rgba(0, 245, 255, 0.5);
+  background: rgba(0, 245, 255, 0.1);
+}
+
+.tank-option.selected {
+  border-color: #00F5FF;
+  background: rgba(0, 245, 255, 0.15);
+  box-shadow: 0 0 15px rgba(0, 245, 255, 0.3);
+}
+
+.tank-icon {
+  font-size: 28px;
+  margin-bottom: 6px;
+}
+
+.tank-name {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.tank-option.selected .tank-name {
+  color: #00F5FF;
+}
+
+/* Tank description */
+.tank-description {
+  font-size: 12px;
+  color: #64748b;
+  text-align: center;
+  margin-bottom: 20px;
+  min-height: 36px;
+  font-weight: 400;
 }
