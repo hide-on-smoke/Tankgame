@@ -507,79 +507,34 @@ export default class Tank extends Phaser.GameObjects.Container {
   }
 
   _createBotGraphics() {
-    // 10 different bot appearances with varying shapes, colors, and sizes
+    // Simplified bot graphics - only 3 simple styles for performance
     const botStyles = [
-      { // Style 1: Gray square with cross
+      { // Style 1: Gray square
         bodyColor: 0x666666, bodyStroke: 0x888888,
         shape: 'square', sizeMod: 1.0,
-        turretColor: 0x444444, turretShape: 'circle',
-        cannonColor: 0x555555, cannonWidth: 0.3, cannonLength: 0.6
+        turretColor: 0x444444, cannonColor: 0x555555
       },
-      { // Style 2: Red triangle
-        bodyColor: 0x8b4513, bodyStroke: 0xa0522d,
-        shape: 'triangle', sizeMod: 0.9,
-        turretColor: 0x5a2a0a, turretShape: 'square',
-        cannonColor: 0x6b3510, cannonWidth: 0.25, cannonLength: 0.7
-      },
-      { // Style 3: Blue circle
-        bodyColor: 0x4169e1, bodyStroke: 0x6495ed,
-        shape: 'circle', sizeMod: 1.1,
-        turretColor: 0x2a4a8a, turretShape: 'circle',
-        cannonColor: 0x3a5a9a, cannonWidth: 0.35, cannonLength: 0.5
-      },
-      { // Style 4: Green hexagon
-        bodyColor: 0x228b22, bodyStroke: 0x32cd32,
-        shape: 'hexagon', sizeMod: 1.05,
-        turretColor: 0x1a6b1a, turretShape: 'hexagon',
-        cannonColor: 0x2a8b2a, cannonWidth: 0.28, cannonLength: 0.65
-      },
-      { // Style 5: Purple diamond
-        bodyColor: 0x8b008b, bodyStroke: 0xba55d3,
-        shape: 'diamond', sizeMod: 0.95,
-        turretColor: 0x5a005a, turretShape: 'diamond',
-        cannonColor: 0x6a006a, cannonWidth: 0.32, cannonLength: 0.55
-      },
-      { // Style 6: Orange rounded rect
+      { // Style 2: Orange circle
         bodyColor: 0xff8c00, bodyStroke: 0xffa500,
+        shape: 'circle', sizeMod: 1.0,
+        turretColor: 0xcc6600, cannonColor: 0xdd7700
+      },
+      { // Style 3: Blue rounded rect
+        bodyColor: 0x4169e1, bodyStroke: 0x6495ed,
         shape: 'rounded', sizeMod: 1.0,
-        turretColor: 0xcc6600, turretShape: 'circle',
-        cannonColor: 0xdd7700, cannonWidth: 0.3, cannonLength: 0.6
-      },
-      { // Style 7: Cyan star
-        bodyColor: 0x00ced1, bodyStroke: 0x40e0d0,
-        shape: 'star', sizeMod: 1.15,
-        turretColor: 0x008b8b, turretShape: 'circle',
-        cannonColor: 0x009b9b, cannonWidth: 0.25, cannonLength: 0.7
-      },
-      { // Style 8: Dark gray octagon
-        bodyColor: 0x4a4a4a, bodyStroke: 0x6a6a6a,
-        shape: 'octagon', sizeMod: 1.0,
-        turretColor: 0x3a3a3a, turretShape: 'square',
-        cannonColor: 0x4a4a4a, cannonWidth: 0.35, cannonLength: 0.5
-      },
-      { // Style 9: Pink heart shape
-        bodyColor: 0xff69b4, bodyStroke: 0xff1493,
-        shape: 'heart', sizeMod: 0.9,
-        turretColor: 0xcc0066, turretShape: 'circle',
-        cannonColor: 0xdd0077, cannonWidth: 0.28, cannonLength: 0.65
-      },
-      { // Style 10: Teal pentagon
-        bodyColor: 0x008080, bodyStroke: 0x20b2aa,
-        shape: 'pentagon', sizeMod: 1.05,
-        turretColor: 0x005050, turretShape: 'pentagon',
-        cannonColor: 0x006060, cannonWidth: 0.3, cannonLength: 0.6
+        turretColor: 0x2a4a8a, cannonColor: 0x3a5a9a
       }
     ];
 
     // Select style based on bot ID hash
-    const styleIndex = Math.abs(this.tankId.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)) % 10;
+    const styleIndex = Math.abs(this.tankId.split('').reduce((a, b) => ((a << 5) - a) + b.charCodeAt(0), 0)) % 3;
     const style = botStyles[styleIndex];
 
     const baseSize = this.size || 60;
     const size = baseSize * style.sizeMod;
     const halfSize = size / 2;
-    const cannonLength = halfSize * style.cannonLength;
-    const cannonWidth = halfSize * style.cannonWidth;
+    const cannonLength = halfSize * 0.6;
+    const cannonWidth = halfSize * 0.3;
     const turretRadius = halfSize * 0.35;
 
     this.bodyGfx = this.scene.add.graphics();
@@ -600,150 +555,19 @@ export default class Tank extends Phaser.GameObjects.Container {
         this.bodyGfx.fillRoundedRect(-halfSize, -halfSize, size, size, 8);
         this.bodyGfx.strokeRoundedRect(-halfSize, -halfSize, size, size, 8);
         break;
-      case 'triangle':
-        this.bodyGfx.beginPath();
-        this.bodyGfx.moveTo(0, -halfSize);
-        this.bodyGfx.lineTo(halfSize, halfSize);
-        this.bodyGfx.lineTo(-halfSize, halfSize);
-        this.bodyGfx.closePath();
-        this.bodyGfx.fillPath();
-        this.bodyGfx.strokePath();
-        break;
-      case 'diamond':
-        this.bodyGfx.beginPath();
-        this.bodyGfx.moveTo(0, -halfSize);
-        this.bodyGfx.lineTo(halfSize, 0);
-        this.bodyGfx.lineTo(0, halfSize);
-        this.bodyGfx.lineTo(-halfSize, 0);
-        this.bodyGfx.closePath();
-        this.bodyGfx.fillPath();
-        this.bodyGfx.strokePath();
-        break;
-      case 'hexagon':
-        this.bodyGfx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const angle = (Math.PI / 3) * i;
-          const x = Math.cos(angle) * halfSize;
-          const y = Math.sin(angle) * halfSize;
-          if (i === 0) this.bodyGfx.moveTo(x, y);
-          else this.bodyGfx.lineTo(x, y);
-        }
-        this.bodyGfx.closePath();
-        this.bodyGfx.fillPath();
-        this.bodyGfx.strokePath();
-        break;
-      case 'octagon':
-        this.bodyGfx.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const angle = (Math.PI / 4) * i;
-          const x = Math.cos(angle) * halfSize;
-          const y = Math.sin(angle) * halfSize;
-          if (i === 0) this.bodyGfx.moveTo(x, y);
-          else this.bodyGfx.lineTo(x, y);
-        }
-        this.bodyGfx.closePath();
-        this.bodyGfx.fillPath();
-        this.bodyGfx.strokePath();
-        break;
-      case 'pentagon':
-        this.bodyGfx.beginPath();
-        for (let i = 0; i < 5; i++) {
-          const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-          const x = Math.cos(angle) * halfSize;
-          const y = Math.sin(angle) * halfSize;
-          if (i === 0) this.bodyGfx.moveTo(x, y);
-          else this.bodyGfx.lineTo(x, y);
-        }
-        this.bodyGfx.closePath();
-        this.bodyGfx.fillPath();
-        this.bodyGfx.strokePath();
-        break;
-      case 'star':
-        this.bodyGfx.beginPath();
-        for (let i = 0; i < 5; i++) {
-          const outerAngle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-          const innerAngle = outerAngle + Math.PI / 5;
-          const outerX = Math.cos(outerAngle) * halfSize;
-          const outerY = Math.sin(outerAngle) * halfSize;
-          const innerX = Math.cos(innerAngle) * halfSize * 0.5;
-          const innerY = Math.sin(innerAngle) * halfSize * 0.5;
-          if (i === 0) this.bodyGfx.moveTo(outerX, outerY);
-          else this.bodyGfx.lineTo(outerX, outerY);
-          this.bodyGfx.lineTo(innerX, innerY);
-        }
-        this.bodyGfx.closePath();
-        this.bodyGfx.fillPath();
-        this.bodyGfx.strokePath();
-        break;
-      case 'heart':
-        this.bodyGfx.beginPath();
-        this.bodyGfx.moveTo(0, halfSize * 0.3);
-        this.bodyGfx.bezierCurveTo(-halfSize, -halfSize * 0.5, -halfSize, -halfSize, 0, -halfSize * 0.3);
-        this.bodyGfx.bezierCurveTo(halfSize, -halfSize, halfSize, -halfSize * 0.5, 0, halfSize * 0.3);
-        this.bodyGfx.fillPath();
-        this.bodyGfx.strokePath();
-        break;
       default:
         this.bodyGfx.fillRoundedRect(-halfSize, -halfSize, size, size, 4);
         this.bodyGfx.strokeRoundedRect(-halfSize, -halfSize, size, size, 4);
     }
 
-    // Draw turret based on shape
+    // Draw simple circular turret
     this.turret = this.scene.add.graphics();
     this.turret.fillStyle(style.turretColor, 1);
     this.turret.lineStyle(1, Phaser.Display.Color.ValueToColor(style.turretColor).lighten(30).color, 0.8);
+    this.turret.fillCircle(0, 0, turretRadius);
+    this.turret.strokeCircle(0, 0, turretRadius);
 
-    switch (style.turretShape) {
-      case 'circle':
-        this.turret.fillCircle(0, 0, turretRadius);
-        this.turret.strokeCircle(0, 0, turretRadius);
-        break;
-      case 'square':
-        this.turret.fillRect(-turretRadius, -turretRadius, turretRadius * 2, turretRadius * 2);
-        this.turret.strokeRect(-turretRadius, -turretRadius, turretRadius * 2, turretRadius * 2);
-        break;
-      case 'diamond':
-        this.turret.beginPath();
-        this.turret.moveTo(0, -turretRadius);
-        this.turret.lineTo(turretRadius, 0);
-        this.turret.lineTo(0, turretRadius);
-        this.turret.lineTo(-turretRadius, 0);
-        this.turret.closePath();
-        this.turret.fillPath();
-        this.turret.strokePath();
-        break;
-      case 'hexagon':
-        this.turret.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const angle = (Math.PI / 3) * i;
-          const x = Math.cos(angle) * turretRadius;
-          const y = Math.sin(angle) * turretRadius;
-          if (i === 0) this.turret.moveTo(x, y);
-          else this.turret.lineTo(x, y);
-        }
-        this.turret.closePath();
-        this.turret.fillPath();
-        this.turret.strokePath();
-        break;
-      case 'pentagon':
-        this.turret.beginPath();
-        for (let i = 0; i < 5; i++) {
-          const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
-          const x = Math.cos(angle) * turretRadius;
-          const y = Math.sin(angle) * turretRadius;
-          if (i === 0) this.turret.moveTo(x, y);
-          else this.turret.lineTo(x, y);
-        }
-        this.turret.closePath();
-        this.turret.fillPath();
-        this.turret.strokePath();
-        break;
-      default:
-        this.turret.fillCircle(0, 0, turretRadius);
-        this.turret.strokeCircle(0, 0, turretRadius);
-    }
-
-    // Draw cannon
+    // Draw simple cannon
     this.cannon = this.scene.add.graphics();
     this.cannon.fillStyle(style.cannonColor, 1);
     this.cannon.lineStyle(1, Phaser.Display.Color.ValueToColor(style.cannonColor).lighten(20).color, 0.8);
@@ -893,14 +717,20 @@ export default class Tank extends Phaser.GameObjects.Container {
     this.health = Math.max(0, this.health - amount);
     this._drawHealthBar();
 
-    // Flash effect
-    this.scene.tweens.add({
-      targets: this,
-      alpha: 0.5,
-      duration: 50,
-      yoyo: true,
-      ease: 'Power1'
-    });
+    // Flash effect - only for visible tanks (my tank or nearby)
+    if (this.isMine || this.scene.myId && this.scene.tanks[this.scene.myId]) {
+      const myTank = this.scene.tanks[this.scene.myId];
+      const dist = Phaser.Math.Distance.Between(this.x, this.y, myTank.x, myTank.y);
+      if (dist < 800) {
+        this.scene.tweens.add({
+          targets: this,
+          alpha: 0.5,
+          duration: 50,
+          yoyo: true,
+          ease: 'Power1'
+        });
+      }
+    }
 
     if (this.health <= 0) {
       this.die();
@@ -969,6 +799,48 @@ export default class Tank extends Phaser.GameObjects.Container {
     this.targetY = y;
     this.targetAngle = angle;
     this.lastUpdateTime = Date.now();
+  }
+
+  _drawHealthBar() {
+    // Skip if health hasn't changed significantly (optimization)
+    if (this._lastHealthDrawn === this.health) return;
+    this._lastHealthDrawn = this.health;
+    
+    // ========================================
+    // HÀM VẼ THANH MÁU - SCI-FI / CYBERPUNK STYLE
+    // ========================================
+    
+    this.healthBar.clear();
+    
+    // Tính phần trăm HP hiện tại
+    const healthPercent = Math.max(0, Math.min(1, this.health / this.maxHealth));
+    
+    // Màu thanh máu: Cyan nếu HP > 30%, Đỏ nếu HP <= 30%
+    const barColor = healthPercent > 0.3 ? 0x00F5FF : 0xFF4444;
+    
+    // Kích thước thanh máu
+    const barWidth = 50;
+    const barHeight = 6;
+    const barX = -barWidth / 2;
+    const barY = -38;
+    const fillWidth = barWidth * healthPercent;
+    
+    // Vẽ thanh máu với màu tương ứng
+    if (fillWidth > 0) {
+      this.healthBar.fillStyle(barColor, 1);
+      this.healthBar.fillRect(barX, barY, fillWidth, barHeight);
+      
+      // Thêm hiệu ứng phát sáng neon cho thanh máu
+      if (healthPercent > 0.3) {
+        // Hiệu ứng glow cho Cyan
+        this.healthBar.lineStyle(1, 0x00F5FF, 0.5);
+        this.healthBar.strokeRect(barX, barY, fillWidth, barHeight);
+      } else {
+        // Hiệu ứng glow cho Đỏ (danger)
+        this.healthBar.lineStyle(1, 0xFF4444, 0.5);
+        this.healthBar.strokeRect(barX, barY, fillWidth, barHeight);
+      }
+    }
   }
 
   updateSmooth() {

@@ -6,14 +6,14 @@ const io = new Server(httpServer, {
   cors: { origin: '*' }
 });
 
-const WORLD_WIDTH = 2100;
-const WORLD_HEIGHT = 2100;
-const BOT_COUNT = 2;
+const WORLD_WIDTH = 4200;
+const WORLD_HEIGHT = 4200;
+const BOT_COUNT = 10;
 const BOT_RESPAWN_DELAY = 2000;
 const BULLET_LIFETIME = 2000;
 
-const NETWORK_TICK = 200;
-const AI_TICK = 300;
+const NETWORK_TICK = 333;
+const AI_TICK = 500;
 const COLLISION_TICK = 200;
 
 const world = {
@@ -94,18 +94,68 @@ function generateName() {
 
 function spawnPlayer(socketId, isBot) {
   let x, y, attempts = 0;
-  while (attempts < 50) {
-    x = 150 + Math.random() * (WORLD_WIDTH - 300);
-    y = 150 + Math.random() * (WORLD_HEIGHT - 300);
-    let tooClose = false;
+  
+  if (isBot) {
+    // Grid-based spawning for even bot distribution
+    const gridCols = 4; // 4x4 grid for 10 bots
+    const gridRows = 4;
+    const cellWidth = WORLD_WIDTH / gridCols;
+    const cellHeight = WORLD_HEIGHT / gridRows;
+    
+    // Find which grid cells already have bots
+    const occupiedCells = new Set();
     for (const id in world.players) {
-      if (id !== socketId && world.players[id].alive && Math.hypot(world.players[id].x - x, world.players[id].y - y) < 150) {
-        tooClose = true; break;
+      if (world.players[id].isBot && world.players[id].alive) {
+        const col = Math.floor(world.players[id].x / cellWidth);
+        const row = Math.floor(world.players[id].y / cellHeight);
+        occupiedCells.add(`${col},${row}`);
       }
     }
-    if (!tooClose) break;
-    attempts++;
+    
+    // Find an unoccupied cell
+    let foundCell = false;
+    for (let row = 0; row < gridRows && !foundCell; row++) {
+      for (let col = 0; col < gridCols && !foundCell; col++) {
+        if (!occupiedCells.has(`${col},${row}`)) {
+          // Spawn in center of this cell with some randomness
+          x = col * cellWidth + cellWidth / 2 + (Math.random() - 0.5) * cellWidth * 0.4;
+          y = row * cellHeight + cellHeight / 2 + (Math.random() - 0.5) * cellHeight * 0.4;
+          foundCell = true;
+        }
+      }
+    }
+    
+    // If all cells occupied, fall back to random spawning
+    if (!foundCell) {
+      while (attempts < 50) {
+        x = 150 + Math.random() * (WORLD_WIDTH - 300);
+        y = 150 + Math.random() * (WORLD_HEIGHT - 300);
+        let tooClose = false;
+        for (const id in world.players) {
+          if (id !== socketId && world.players[id].alive && Math.hypot(world.players[id].x - x, world.players[id].y - y) < 150) {
+            tooClose = true; break;
+          }
+        }
+        if (!tooClose) break;
+        attempts++;
+      }
+    }
+  } else {
+    // Human players spawn randomly with distance check
+    while (attempts < 50) {
+      x = 150 + Math.random() * (WORLD_WIDTH - 300);
+      y = 150 + Math.random() * (WORLD_HEIGHT - 300);
+      let tooClose = false;
+      for (const id in world.players) {
+        if (id !== socketId && world.players[id].alive && Math.hypot(world.players[id].x - x, world.players[id].y - y) < 150) {
+          tooClose = true; break;
+        }
+      }
+      if (!tooClose) break;
+      attempts++;
+    }
   }
+  
   return { x, y, level: isBot ? randomBotLevel() : 1 };
 }
 
@@ -202,7 +252,7 @@ function botAI() {
       if (!bot.isBot || !bot.alive) continue;
 
       if (now > bot._nextDecision) {
-        bot._nextDecision = now + 800 + Math.random() * 400; // Reduced frequency: 800-1200ms
+        bot._nextDecision = now + 1000 + Math.random() * 500; // Reduced frequency: 1000-1500ms
         let bestId = null, bestDist = Infinity;
         for (const oid of playerIds) {
           if (oid === id) continue;

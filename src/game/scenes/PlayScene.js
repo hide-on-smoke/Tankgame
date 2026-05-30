@@ -9,7 +9,7 @@ export default class PlayScene extends Phaser.Scene {
     super('PlayScene');
     this.tanks = {};
     this.bullets = {};
-    this.worldSize = { width: 2100, height: 2100 };
+    this.worldSize = { width: 4200, height: 4200 };
     this.config = { moveSpeed: 160, rotateSpeed: 180, fireRate: 600 };
     this.lastFireTime = 0;
     this.kills = 0;
@@ -68,7 +68,6 @@ export default class PlayScene extends Phaser.Scene {
 
       socketManager.on('connect', () => {
         try {
-          console.log('[CLIENT] Connected! Socket ID:', socketManager.id);
           this._sendJoin();
         } catch (e) { console.error('[CLIENT] connect handler error:', e); }
       });
@@ -76,7 +75,6 @@ export default class PlayScene extends Phaser.Scene {
       if (!socketManager.connected) {
         socketManager.connect();
       } else {
-        console.log('[CLIENT] Already connected, sending join');
         this._sendJoin();
       }
     } catch (e) {
@@ -182,8 +180,8 @@ export default class PlayScene extends Phaser.Scene {
         // Play sad game over sound if it's my tank and return to menu
         if (id === this.myId) {
           this._playSadGameOver();
-          // Return to menu after 2 seconds
-          this.time.delayedCall(2000, () => {
+          // Return to menu after 4 seconds
+          this.time.delayedCall(4000, () => {
             window.__returnToMenu = true;
             this.scene.stop();
             this.game.destroy(true);
@@ -276,15 +274,12 @@ export default class PlayScene extends Phaser.Scene {
       return;
     }
 
-    console.log('[WS] Socket ID:', socketId, 'Players in state:', Object.keys(state.players));
     
     if (!this.myId && state.players[socketId]) {
       this.myId = socketId;
-      console.log('[WS] Set myId to:', this.myId);
     }
     if (this.myId && state.players && !state.players[this.myId] && socketManager.id && state.players[socketManager.id]) {
       this.myId = socketManager.id;
-      console.log('[WS] Updated myId to:', this.myId);
     }
 
     this.leaderboard = Object.values(state.players).map(p => ({
@@ -313,7 +308,6 @@ export default class PlayScene extends Phaser.Scene {
           if (this.tanks[id].body) {
             this.tanks[id].body.setCircle(this.tanks[id].size / 2, -this.tanks[id].size / 2, -this.tanks[id].size / 2);
           }
-          console.log(`Updated tank ${id} to type ${pd.tankType}`);
         }
         // Update stats for my tank too
         if (this.tanks[id].isMine) {
@@ -349,7 +343,6 @@ export default class PlayScene extends Phaser.Scene {
         if (this.tanks[id]) continue;
         const isMine = id === socketManager.id;
         const isBot = pd.isBot === true;
-        console.log('[WS] Creating tank - ID:', id, 'isMine:', isMine, 'isBot:', isBot, 'socketId:', socketId);
         // For my tank, use the selected tankType from window, otherwise use server's tankType
         const tankType = isMine ? (window.__tankType || 5) : (pd.tankType || 5);
         const tank = new Tank(this, pd.x, pd.y, id, isMine, null, pd.name, pd.level, isBot, tankType);
@@ -374,9 +367,7 @@ export default class PlayScene extends Phaser.Scene {
           this.cameras.main.startFollow(tank, true, 0.08, 0.08);
           this.cameras.main.setZoom(1);
           this.minimap.startFollow(tank, true);
-          console.log('My tank:', id, 'at', pd.x, pd.y, 'type:', tankType);
         } else {
-          console.log('Other tank:', id, 'at', pd.x, pd.y);
         }
       }
     }
@@ -640,7 +631,6 @@ export default class PlayScene extends Phaser.Scene {
       if (this._upgradeMenuActive === false) return;
       const opt = upgradeOptions[idx];
       if (!opt) return;
-      console.log(`[UPGRADE] Selecting index ${idx}, key: ${opt.key}`);
       this._selectUpgrade(opt.key);
     };
     // Use only event.key checking to avoid conflicts
@@ -884,9 +874,9 @@ export default class PlayScene extends Phaser.Scene {
     if (this.backgroundMusic && this.backgroundMusic.isPlaying) {
       this.backgroundMusic.stop();
     }
-    this.sadGameOverSound.play({ duration: 2000 }); // Limit to 2 seconds
-    // Resume background music after 2 seconds
-    this.time.delayedCall(2000, () => {
+    this.sadGameOverSound.play({ duration: 4000 }); // Limit to 4 seconds
+    // Resume background music after 4 seconds
+    this.time.delayedCall(4000, () => {
       if (this.backgroundMusic) {
         this.backgroundMusic.play();
       }
