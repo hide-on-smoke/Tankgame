@@ -9,6 +9,7 @@ export default class PlayScene extends Phaser.Scene {
     super('PlayScene');
     this.tanks = {};
     this.bullets = {};
+    this.crates = {};
     this.worldSize = { width: 4200, height: 4200 };
     this.config = { moveSpeed: 160, rotateSpeed: 180, fireRate: 600 };
     this.lastFireTime = 0;
@@ -266,6 +267,7 @@ export default class PlayScene extends Phaser.Scene {
 
     const receivedTankIds = new Set();
     const receivedBulletIds = new Set();
+    const receivedCrateIds = new Set();
 
     // Validate socket ID exists
     const socketId = socketManager.id;
@@ -383,6 +385,17 @@ export default class PlayScene extends Phaser.Scene {
       }
     }
 
+    if (state.crates) {
+      for (const cd of state.crates) {
+        receivedCrateIds.add(cd.id);
+        if (!this.crates[cd.id]) {
+          this._createCrate(cd.id, cd.x, cd.y, cd.health, cd.maxHealth);
+        } else {
+          this._updateCrate(cd.id, cd.health, cd.maxHealth);
+        }
+      }
+    }
+
     for (const id of Object.keys(this.bullets)) {
       if (!receivedBulletIds.has(id)) { 
         if (this.bullets[id]) this.bullets[id].destroy();
@@ -393,6 +406,12 @@ export default class PlayScene extends Phaser.Scene {
       if (!receivedTankIds.has(id)) { 
         if (this.tanks[id]) this.tanks[id].destroy();
         delete this.tanks[id]; 
+      }
+    }
+    for (const id of Object.keys(this.crates)) {
+      if (!receivedCrateIds.has(id)) {
+        if (this.crates[id]) this._destroyCrate(id);
+        delete this.crates[id];
       }
     }
   }
@@ -896,6 +915,87 @@ export default class PlayScene extends Phaser.Scene {
   _playSelect() {
     if (!this.selectSound) return;
     this.selectSound.play();
+  }
+
+  _createCrate(id, x, y, health, maxHealth) {
+    const crate = {
+      id,
+      x,
+      y,
+      health,
+      maxHealth,
+      graphics: this.add.graphics(),
+      healthBar: this.add.graphics()
+    };
+    crate.graphics.setDepth(3);
+    crate.healthBar.setDepth(4);
+    this._drawCrate(crate);
+    this.crates[id] = crate;
+  }
+
+  _drawCrate(crate) {
+    const { x, y, health, maxHealth } = crate;
+    const size = 60;
+    
+    // Draw wooden crate
+    crate.graphics.clear();
+    
+    // Main body - brown wood color
+    crate.graphics.fillStyle(0x8B4513, 1);
+    crate.graphics.fillRect(x - size/2, y - size/2, size, size);
+    
+    // Wood grain lines
+    crate.graphics.lineStyle(2, 0x654321, 0.8);
+    crate.graphics.strokeRect(x - size/2, y - size/2, size, size);
+    crate.graphics.lineStyle(1, 0x654321, 0.5);
+    crate.graphics.lineBetween(x - size/2, y - size/4, x + size/2, y - size/4);
+    crate.graphics.lineBetween(x - size/2, y + size/4, x + size/2, y + size/4);
+    crate.graphics.lineBetween(x - size/4, y - size/2, x - size/4, y + size/2);
+    crate.graphics.lineBetween(x + size/4, y - size/2, x + size/4, y + size/2);
+    
+    // X pattern on crate
+    crate.graphics.lineStyle(2, 0x5D3A1A, 0.7);
+    crate.graphics.lineBetween(x - size/2, y - size/2, x + size/2, y + size/2);
+    crate.graphics.lineBetween(x + size/2, y - size/2, x - size/2, y + size/2);
+    
+    // Draw health bar
+    this._drawCrateHealthBar(crate);
+  }
+
+  _drawCrateHealthBar(crate) {
+    const { x, y, health, maxHealth } = crate;
+    const barWidth = 40;
+    const barHeight = 4;
+    const barY = y - 25;
+    const healthPercent = Math.max(0, health / maxHealth);
+    
+    crate.healthBar.clear();
+    
+    // Background
+    crate.healthBar.fillStyle(0x333333, 0.8);
+    crate.healthBar.fillRect(x - barWidth/2, barY, barWidth, barHeight);
+    
+    // Health fill
+    if (healthPercent > 0) {
+      const barColor = healthPercent > 0.5 ? 0x00FF00 : healthPercent > 0.25 ? 0xFFFF00 : 0xFF0000;
+      crate.healthBar.fillStyle(barColor, 1);
+      crate.healthBar.fillRect(x - barWidth/2, barY, barWidth * healthPercent, barHeight);
+    }
+  }
+
+  _updateCrate(id, health, maxHealth) {
+    const crate = this.crates[id];
+    if (!crate) return;
+    crate.health = health;
+    crate.maxHealth = maxHealth;
+    this._drawCrateHealthBar(crate);
+  }
+
+  _destroyCrate(id) {
+    const crate = this.crates[id];
+    if (!crate) return;
+    if (crate.graphics) crate.graphics.destroy();
+    if (crate.healthBar) crate.healthBar.destroy();
   }
 
   destroy() {

@@ -11,6 +11,9 @@ const WORLD_HEIGHT = 4200;
 const BOT_COUNT = 10;
 const BOT_RESPAWN_DELAY = 2000;
 const BULLET_LIFETIME = 2000;
+const CRATE_COUNT = 50;
+const CRATE_HEALTH = 100;
+const CRATE_XP_REWARD = 0.5;
 
 const NETWORK_TICK = 333;
 const AI_TICK = 500;
@@ -19,6 +22,7 @@ const COLLISION_TICK = 200;
 const world = {
   players: {},
   bullets: {},   // { [id]: { id, ownerId, x, y, angle, speed, alive } }
+  crates: {},    // { [id]: { id, x, y, health, maxHealth, alive } }
 };
 
 // Batched network updates to prevent flooding clients
@@ -230,6 +234,29 @@ function ensureBotCount() {
   while (count < BOT_COUNT) { createBot(); count++; }
 }
 
+let crateCounter = 0;
+function createCrate() {
+  crateCounter++;
+  const id = `crate_${crateCounter}_${Date.now()}`;
+  // Random position with margin from edges
+  const x = 100 + Math.random() * (WORLD_WIDTH - 200);
+  const y = 100 + Math.random() * (WORLD_HEIGHT - 200);
+  world.crates[id] = {
+    id,
+    x,
+    y,
+    health: CRATE_HEALTH,
+    maxHealth: CRATE_HEALTH,
+    alive: true
+  };
+}
+
+function ensureCrateCount() {
+  let count = 0;
+  for (const id in world.crates) if (world.crates[id].alive) count++;
+  while (count < CRATE_COUNT) { createCrate(); count++; }
+}
+
 function buildLeaderboard() {
   return Object.values(world.players).map(p => ({
     id: p.id, name: p.name,
@@ -254,6 +281,9 @@ function botAI() {
       if (now > bot._nextDecision) {
         bot._nextDecision = now + 1000 + Math.random() * 500; // Reduced frequency: 1000-1500ms
         let bestId = null, bestDist = Infinity;
+        let bestCrateId = null, bestCrateDist = Infinity;
+        
+        // Find closest player
         for (const oid of playerIds) {
           if (oid === id) continue;
           const o = world.players[oid];
@@ -261,64 +291,137 @@ function botAI() {
           const d = Math.hypot(bot.x - o.x, bot.y - o.y);
           if (d < bestDist) { bestDist = d; bestId = oid; }
         }
-        bot._targetId = bestId;
+        
+        // Find closest crate
+        for (const crateId in world.crates) {
+          const crate = world.crates[crateId];
+          if (!crate || !crate.alive) continue;
+          const d = Math.hypot(bot.x - crate.x, bot.y - crate.y);
+          if (d < bestCrateDist) { bestCrateDist = d; bestCrateId = crateId; }
+        }
+        
+        // Prioritize players/bots over crates
+        // Only target crates if no player is within 800 units
+        if (bestId && bestDist < 800) {
+          bot._targetId = bestId;
+          bot._targetCrateId = null;
+        } else if (bestCrateId) {
+          bot._targetId = null;
+          bot._targetCrateId = bestCrateId;
+        } else {
+          bot._targetId = bestId;
+          bot._targetCrateId = null;
+        }
         bot._dodgeDir = Math.random() > 0.5 ? 1 : -1;
       }
 
-      if (!bot._targetId) continue;
-      const target = world.players[bot._targetId];
-      if (!target || !target.alive) { bot._targetId = null; continue; }
+      // Handle crate targeting
+      if (bot._targetCrateId) {
+        const crate = world.crates[bot._targetCrateId];
+        if (!crate || !crate.alive) { bot._targetCrateId = null; continue; }
+        
+        const dx = crate.x - bot.x, dy = crate.y - bot.y;
+        const dist = Math.hypot(dx, dy);
+        const aimAngle = Math.atan2(dy, dx) * (180 / Math.PI);
 
-      const dx = target.x - bot.x, dy = target.y - bot.y;
-      const dist = Math.hypot(dx, dy);
-      const aimAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+        let angleDiff = aimAngle - bot.angle;
+        angleDiff = ((angleDiff + 180) % 360 + 360) % 360 - 180;
+        const maxRot = (bot.rotationSpeed || 240) * delta;
+        if (Math.abs(angleDiff) > maxRot) bot.angle += Math.sign(angleDiff) * maxRot;
+        else bot.angle += angleDiff * 0.9;
+        bot.angle = ((bot.angle % 360) + 360) % 360;
 
-      let angleDiff = aimAngle - bot.angle;
-      // Normalize to [-180, 180] using modulo instead of while loops
-      angleDiff = ((angleDiff + 180) % 360 + 360) % 360 - 180;
-      const maxRot = (bot.rotationSpeed || 240) * delta;
-      if (Math.abs(angleDiff) > maxRot) bot.angle += Math.sign(angleDiff) * maxRot;
-      else bot.angle += angleDiff * 0.9; // Much faster convergence for smoother rotation
-      // Normalize final angle to [0, 360) using modulo
-      bot.angle = ((bot.angle % 360) + 360) % 360;
+        const spd = (bot.speed || 130) * delta;
+        const rad = aimAngle * (Math.PI / 180);
+        
+        let mx = 0, my = 0;
+        if (dist > 300) {
+          mx += Math.cos(rad) * spd * 0.5;
+          my += Math.sin(rad) * spd * 0.5;
+        } else if (dist < 200) {
+          mx -= Math.cos(rad) * spd * 0.3;
+          my -= Math.sin(rad) * spd * 0.3;
+        }
+        bot.x += mx; bot.y += my;
+        bot.x = Math.max(30, Math.min(WORLD_WIDTH - 30, bot.x));
+        bot.y = Math.max(30, Math.min(WORLD_HEIGHT - 30, bot.y));
 
-      const spd = (bot.speed || 130) * delta;
-      const strafeRad = (aimAngle + 90 * bot._dodgeDir) * (Math.PI / 180);
-
-      let mx = 0, my = 0;
-      const rad = aimAngle * (Math.PI / 180);
-      if (dist > 400) {
-        mx += Math.cos(rad) * spd * 0.4; // Slower approach
-        my += Math.sin(rad) * spd * 0.4;
-      } else if (dist < 300) {
-        mx -= Math.cos(rad) * spd * 0.5; // Back away when too close
-        my -= Math.sin(rad) * spd * 0.5;
+        if (Math.abs(angleDiff) < 40 && dist < 600) {
+          const fr = Math.max(1000, (bot.fireRate || 500) * 2);
+          if (now - bot._lastFire >= fr) {
+            bot._lastFire = now;
+            const bc = bot.bulletCount || 1, bs = bot.bulletSpeed || 400;
+            for (let i = 0; i < bc; i++) {
+              const off = (i - (bc - 1) / 2) * 0.15;
+              const a = bot.angle + off * (180 / Math.PI);
+              const r = a * (Math.PI / 180);
+              const bid = `${id}-${now}-${i}`;
+              world.bullets[bid] = {
+                id: bid, ownerId: id,
+                x: bot.x + Math.cos(r) * 30, y: bot.y + Math.sin(r) * 30,
+                angle: a, speed: bs, vx: Math.cos(r) * bs, vy: Math.sin(r) * bs,
+                created: now, alive: true
+              };
+            }
+          }
+        }
       }
-      if (dist < 600) {
-        const dodgeMul = (now - bot._lastHurt < 1000) ? 1.0 : 0.5;
-        mx += Math.cos(strafeRad) * spd * dodgeMul;
-        my += Math.sin(strafeRad) * spd * dodgeMul;
-      }
-      bot.x += mx; bot.y += my;
-      bot.x = Math.max(30, Math.min(WORLD_WIDTH - 30, bot.x));
-      bot.y = Math.max(30, Math.min(WORLD_HEIGHT - 30, bot.y));
+      // Handle player targeting
+      else if (bot._targetId) {
+        const target = world.players[bot._targetId];
+        if (!target || !target.alive) { bot._targetId = null; continue; }
 
-      if (Math.abs(angleDiff) < 40 && dist < 800) {
-        const fr = Math.max(1000, (bot.fireRate || 500) * 2); // Minimum 1s between shots
-        if (now - bot._lastFire >= fr) {
-          bot._lastFire = now;
-          const bc = bot.bulletCount || 1, bs = bot.bulletSpeed || 400;
-          for (let i = 0; i < bc; i++) {
-            const off = (i - (bc - 1) / 2) * 0.15;
-            const a = bot.angle + off * (180 / Math.PI);
-            const r = a * (Math.PI / 180);
-            const bid = `${id}-${now}-${i}`;
-            world.bullets[bid] = {
-              id: bid, ownerId: id,
-              x: bot.x + Math.cos(r) * 30, y: bot.y + Math.sin(r) * 30,
-              angle: a, speed: bs, vx: Math.cos(r) * bs, vy: Math.sin(r) * bs,
-              created: now, alive: true
-            };
+        const dx = target.x - bot.x, dy = target.y - bot.y;
+        const dist = Math.hypot(dx, dy);
+        const aimAngle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+        let angleDiff = aimAngle - bot.angle;
+        // Normalize to [-180, 180] using modulo instead of while loops
+        angleDiff = ((angleDiff + 180) % 360 + 360) % 360 - 180;
+        const maxRot = (bot.rotationSpeed || 240) * delta;
+        if (Math.abs(angleDiff) > maxRot) bot.angle += Math.sign(angleDiff) * maxRot;
+        else bot.angle += angleDiff * 0.9; // Much faster convergence for smoother rotation
+        // Normalize final angle to [0, 360) using modulo
+        bot.angle = ((bot.angle % 360) + 360) % 360;
+
+        const spd = (bot.speed || 130) * delta;
+        const strafeRad = (aimAngle + 90 * bot._dodgeDir) * (Math.PI / 180);
+
+        let mx = 0, my = 0;
+        const rad = aimAngle * (Math.PI / 180);
+        if (dist > 400) {
+          mx += Math.cos(rad) * spd * 0.4; // Slower approach
+          my += Math.sin(rad) * spd * 0.4;
+        } else if (dist < 300) {
+          mx -= Math.cos(rad) * spd * 0.5; // Back away when too close
+          my -= Math.sin(rad) * spd * 0.5;
+        }
+        if (dist < 600) {
+          const dodgeMul = (now - bot._lastHurt < 1000) ? 1.0 : 0.5;
+          mx += Math.cos(strafeRad) * spd * dodgeMul;
+          my += Math.sin(strafeRad) * spd * dodgeMul;
+        }
+        bot.x += mx; bot.y += my;
+        bot.x = Math.max(30, Math.min(WORLD_WIDTH - 30, bot.x));
+        bot.y = Math.max(30, Math.min(WORLD_HEIGHT - 30, bot.y));
+
+        if (Math.abs(angleDiff) < 40 && dist < 800) {
+          const fr = Math.max(1000, (bot.fireRate || 500) * 2); // Minimum 1s between shots
+          if (now - bot._lastFire >= fr) {
+            bot._lastFire = now;
+            const bc = bot.bulletCount || 1, bs = bot.bulletSpeed || 400;
+            for (let i = 0; i < bc; i++) {
+              const off = (i - (bc - 1) / 2) * 0.15;
+              const a = bot.angle + off * (180 / Math.PI);
+              const r = a * (Math.PI / 180);
+              const bid = `${id}-${now}-${i}`;
+              world.bullets[bid] = {
+                id: bid, ownerId: id,
+                x: bot.x + Math.cos(r) * 30, y: bot.y + Math.sin(r) * 30,
+                angle: a, speed: bs, vx: Math.cos(r) * bs, vy: Math.sin(r) * bs,
+                created: now, alive: true
+              };
+            }
           }
         }
       }
@@ -354,95 +457,131 @@ function checkCollisions() {
       b.y += bvy * delta;
 
       let hit = false;
-      for (let ti = 0; ti < alivePlayers.length && !hit; ti++) {
-        const t = alivePlayers[ti];
-        if (t.id === b.ownerId) continue;
-        if (Math.hypot(b.x - t.x, b.y - t.y) < 40) {
+      
+      // Check collision with crates first
+      for (const crateId in world.crates) {
+        const crate = world.crates[crateId];
+        if (!crate || !crate.alive) continue;
+        if (Math.hypot(b.x - crate.x, b.y - crate.y) < 70) {
           hit = true;
           const dmg = owner.damage || 20;
-          const armor = t.armor || 0;
-          t.health = Math.max(0, (t.health ?? 100) - Math.max(1, dmg - armor));
-          if (t.isBot) t._lastHurt = now;
+          crate.health = Math.max(0, crate.health - dmg);
           delete world.bullets[bulletId];
-
-          queueBatch('healthUpdate', { id: t.id, health: t.health, maxHealth: t.maxHealth });
-
-          if (t.health <= 0) {
-            t.alive = false; t.deaths++;
-            if (owner.id !== t.id) {
-              owner.kills++; owner.score++;
-              owner.exp = (owner.exp || 0) + 1;
-              while (owner.exp >= owner.nextLevelExp) {
-                owner.exp -= owner.nextLevelExp;
-                owner.level++;
-                // Calculate next level exp based on new level
-                if (owner.level === 2) {
-                  owner.nextLevelExp = 1;
-                } else if (owner.level === 3) {
-                  owner.nextLevelExp = 3;
-                } else {
-                  owner.nextLevelExp = owner.level;
-                }
-                queueBatch('levelUp', { id: owner.id, level: owner.level, exp: owner.exp, nextLevelExp: owner.nextLevelExp });
+          
+          if (crate.health <= 0) {
+            crate.alive = false;
+            delete world.crates[crateId];
+            // Give XP reward to owner
+            owner.exp = (owner.exp || 0) + CRATE_XP_REWARD;
+            while (owner.exp >= owner.nextLevelExp) {
+              owner.exp -= owner.nextLevelExp;
+              owner.level++;
+              if (owner.level === 2) {
+                owner.nextLevelExp = 1;
+              } else if (owner.level === 3) {
+                owner.nextLevelExp = 3;
+              } else {
+                owner.nextLevelExp = owner.level;
               }
+              queueBatch('levelUp', { id: owner.id, level: owner.level, exp: owner.exp, nextLevelExp: owner.nextLevelExp });
             }
-            queueBatch('tankDied', { id: t.id, killerId: owner.id });
-            queueBatch('leaderboard', buildLeaderboard());
+          }
+          break; // Bullet can only hit one thing
+        }
+      }
+      
+      // Check collision with players if bullet didn't hit crate
+      if (!hit) {
+        for (let ti = 0; ti < alivePlayers.length && !hit; ti++) {
+          const t = alivePlayers[ti];
+          if (t.id === b.ownerId) continue;
+          if (Math.hypot(b.x - t.x, b.y - t.y) < 40) {
+            hit = true;
+            const dmg = owner.damage || 20;
+            const armor = t.armor || 0;
+            t.health = Math.max(0, (t.health ?? 100) - Math.max(1, dmg - armor));
+            if (t.isBot) t._lastHurt = now;
+            delete world.bullets[bulletId];
 
-            const delay = t.isBot ? BOT_RESPAWN_DELAY : 3000;
-            // Clear existing timeout if any
-            if (respawnTimeouts.has(t.id)) {
-              clearTimeout(respawnTimeouts.get(t.id));
-            }
-            const timeoutId = setTimeout(() => {
-              respawnTimeouts.delete(t.id);
-              if (world.players[t.id]) {
-                const isBot = t.isBot || false;
-                const sp = spawnPlayer(t.id, isBot);
-                const p = world.players[t.id];
-                p.alive = true; p.health = p.maxHealth;
-                p.x = sp.x; p.y = sp.y; p.angle = Math.random() * 360;
-                p._lastHurt = 0;
-                if (isBot) {
-                  const nl = randomBotLevel();
-                  p.level = nl;
-                  // Calculate next level exp based on level
-                  if (nl === 1) {
-                    p.nextLevelExp = 1;
-                  } else if (nl === 2) {
-                    p.nextLevelExp = 3;
+            queueBatch('healthUpdate', { id: t.id, health: t.health, maxHealth: t.maxHealth });
+
+            if (t.health <= 0) {
+              t.alive = false; t.deaths++;
+              if (owner.id !== t.id) {
+                owner.kills++; owner.score++;
+                owner.exp = (owner.exp || 0) + 1;
+                while (owner.exp >= owner.nextLevelExp) {
+                  owner.exp -= owner.nextLevelExp;
+                  owner.level++;
+                  // Calculate next level exp based on new level
+                  if (owner.level === 2) {
+                    owner.nextLevelExp = 1;
+                  } else if (owner.level === 3) {
+                    owner.nextLevelExp = 3;
                   } else {
-                    p.nextLevelExp = nl;
+                    owner.nextLevelExp = owner.level;
                   }
-                  p.exp = 0;
-                  p.damage = 5; p.maxHealth = 50; p.health = 50;
-                  p.speed = 130; p.rotationSpeed = 240; p.fireRate = 1000;
-                  p.regenPerSecond = 1; p.bulletCount = 1; p.bulletSpeed = 500;
-                  p.armor = 0; p.upgradeHistory = [];
-                  applyRandomUpgradesForLevel(p, nl);
-                } else {
-                  // Reset human player to default stats on death (preserve tank type)
-                  const tankType = p.tankType || 5;
-                  const typeStats = {
-                    1: { health: 150, maxHealth: 150, damage: 18, speed: 120, rotationSpeed: 140, fireRate: 700, regenPerSecond: 2, bulletCount: 1, bulletSpeed: 350, armor: 3, size: 115 },
-                    2: { health: 80, maxHealth: 80, damage: 15, speed: 220, rotationSpeed: 220, fireRate: 500, regenPerSecond: 1, bulletCount: 1, bulletSpeed: 500, armor: 0, size: 96 },
-                    3: { health: 110, maxHealth: 110, damage: 30, speed: 110, rotationSpeed: 120, fireRate: 800, regenPerSecond: 1, bulletCount: 1, bulletSpeed: 380, armor: 1, size: 134 },
-                    4: { health: 100, maxHealth: 100, damage: 12, speed: 150, rotationSpeed: 160, fireRate: 550, regenPerSecond: 5, bulletCount: 1, bulletSpeed: 420, armor: 1, size: 114 },
-                    5: { health: 100, maxHealth: 100, damage: 20, speed: 160, rotationSpeed: 180, fireRate: 600, regenPerSecond: 1.5, bulletCount: 1, bulletSpeed: 400, armor: 1, size: 104 }
-                  };
-                  const stats = typeStats[tankType] || typeStats[5];
-                  p.level = 1; p.nextLevelExp = 1; p.exp = 0;
-                  p.tankType = tankType;
-                  p.damage = stats.damage; p.maxHealth = stats.maxHealth; p.health = stats.maxHealth;
-                  p.speed = stats.speed; p.rotationSpeed = stats.rotationSpeed; p.fireRate = stats.fireRate;
-                  p.regenPerSecond = stats.regenPerSecond; p.bulletCount = stats.bulletCount; p.bulletSpeed = stats.bulletSpeed;
-                  p.armor = stats.armor; p.size = stats.size; p.upgradeHistory = [];
+                  queueBatch('levelUp', { id: owner.id, level: owner.level, exp: owner.exp, nextLevelExp: owner.nextLevelExp });
                 }
-                queueBatch('respawn', { id: t.id, x: sp.x, y: sp.y, level: p.level, exp: p.exp, nextLevelExp: p.nextLevelExp, damage: p.damage, maxHealth: p.maxHealth, speed: p.speed, rotationSpeed: p.rotationSpeed, fireRate: p.fireRate, regenPerSecond: p.regenPerSecond, bulletCount: p.bulletCount, bulletSpeed: p.bulletSpeed, armor: p.armor, tankType: p.tankType, size: p.size, upgradeHistory: p.upgradeHistory });
-                queueBatch('leaderboard', buildLeaderboard());
               }
-            }, delay);
-            respawnTimeouts.set(t.id, timeoutId);
+              queueBatch('tankDied', { id: t.id, killerId: owner.id });
+              queueBatch('leaderboard', buildLeaderboard());
+
+              const delay = t.isBot ? BOT_RESPAWN_DELAY : 3000;
+              // Clear existing timeout if any
+              if (respawnTimeouts.has(t.id)) {
+                clearTimeout(respawnTimeouts.get(t.id));
+              }
+              const timeoutId = setTimeout(() => {
+                respawnTimeouts.delete(t.id);
+                if (world.players[t.id]) {
+                  const isBot = t.isBot || false;
+                  const sp = spawnPlayer(t.id, isBot);
+                  const p = world.players[t.id];
+                  p.alive = true; p.health = p.maxHealth;
+                  p.x = sp.x; p.y = sp.y; p.angle = Math.random() * 360;
+                  p._lastHurt = 0;
+                  if (isBot) {
+                    const nl = randomBotLevel();
+                    p.level = nl;
+                    // Calculate next level exp based on level
+                    if (nl === 1) {
+                      p.nextLevelExp = 1;
+                    } else if (nl === 2) {
+                      p.nextLevelExp = 3;
+                    } else {
+                      p.nextLevelExp = nl;
+                    }
+                    p.exp = 0;
+                    p.damage = 5; p.maxHealth = 50; p.health = 50;
+                    p.speed = 130; p.rotationSpeed = 240; p.fireRate = 1000;
+                    p.regenPerSecond = 1; p.bulletCount = 1; p.bulletSpeed = 500;
+                    p.armor = 0; p.upgradeHistory = [];
+                    applyRandomUpgradesForLevel(p, nl);
+                  } else {
+                    // Reset human player to default stats on death (preserve tank type)
+                    const tankType = p.tankType || 5;
+                    const typeStats = {
+                      1: { health: 150, maxHealth: 150, damage: 18, speed: 120, rotationSpeed: 140, fireRate: 700, regenPerSecond: 2, bulletCount: 1, bulletSpeed: 350, armor: 3, size: 115 },
+                      2: { health: 80, maxHealth: 80, damage: 15, speed: 220, rotationSpeed: 220, fireRate: 500, regenPerSecond: 1, bulletCount: 1, bulletSpeed: 500, armor: 0, size: 96 },
+                      3: { health: 110, maxHealth: 110, damage: 30, speed: 110, rotationSpeed: 120, fireRate: 800, regenPerSecond: 1, bulletCount: 1, bulletSpeed: 380, armor: 1, size: 134 },
+                      4: { health: 100, maxHealth: 100, damage: 12, speed: 150, rotationSpeed: 160, fireRate: 550, regenPerSecond: 5, bulletCount: 1, bulletSpeed: 420, armor: 1, size: 114 },
+                      5: { health: 100, maxHealth: 100, damage: 20, speed: 160, rotationSpeed: 180, fireRate: 600, regenPerSecond: 1.5, bulletCount: 1, bulletSpeed: 400, armor: 1, size: 104 }
+                    };
+                    const stats = typeStats[tankType] || typeStats[5];
+                    p.level = 1; p.nextLevelExp = 1; p.exp = 0;
+                    p.tankType = tankType;
+                    p.damage = stats.damage; p.maxHealth = stats.maxHealth; p.health = stats.maxHealth;
+                    p.speed = stats.speed; p.rotationSpeed = stats.rotationSpeed; p.fireRate = stats.fireRate;
+                    p.regenPerSecond = stats.regenPerSecond; p.bulletCount = stats.bulletCount; p.bulletSpeed = stats.bulletSpeed;
+                    p.armor = stats.armor; p.size = stats.size; p.upgradeHistory = [];
+                  }
+                  queueBatch('respawn', { id: t.id, x: sp.x, y: sp.y, level: p.level, exp: p.exp, nextLevelExp: p.nextLevelExp, damage: p.damage, maxHealth: p.maxHealth, speed: p.speed, rotationSpeed: p.rotationSpeed, fireRate: p.fireRate, regenPerSecond: p.regenPerSecond, bulletCount: p.bulletCount, bulletSpeed: p.bulletSpeed, armor: p.armor, tankType: p.tankType, size: p.size, upgradeHistory: p.upgradeHistory });
+                  queueBatch('leaderboard', buildLeaderboard());
+                }
+              }, delay);
+              respawnTimeouts.set(t.id, timeoutId);
+            }
           }
         }
       }
@@ -469,9 +608,10 @@ function sanitizeBullet(b) {
 
 // Tick loop: broadcast full state
 setInterval(() => {
-  const snapshot = { players: {}, bullets: [] };
+  const snapshot = { players: {}, bullets: [], crates: [] };
   for (const id in world.players) snapshot.players[id] = sanitize(world.players[id]);
   for (const id in world.bullets) snapshot.bullets.push(sanitizeBullet(world.bullets[id]));
+  for (const id in world.crates) snapshot.crates.push({ id: world.crates[id].id, x: world.crates[id].x, y: world.crates[id].y, health: world.crates[id].health, maxHealth: world.crates[id].maxHealth });
   io.emit('worldState', snapshot);
 
   const realCount = Object.values(world.players).filter(p => !p.isBot).length;
@@ -483,18 +623,21 @@ setInterval(() => {
 
 setInterval(botAI, AI_TICK);
 setInterval(checkCollisions, COLLISION_TICK);
+setInterval(ensureCrateCount, 5000); // Check every 5 seconds and respawn crates
 
 io.on('connection', (socket) => {
   const sp = spawnPlayer(socket.id, false);
   world.players[socket.id] = createPlayerData(socket.id, sp, generateName(), false, 5); // Default to type 5 initially
   ensureBotCount();
+  ensureCrateCount();
 
   console.log(`[CONNECT] ${socket.id} joins. Total: ${Object.keys(world.players).length}`);
 
   // Send current world snapshot to the new player immediately
-  const snapshot = { players: {}, bullets: [] };
+  const snapshot = { players: {}, bullets: [], crates: [] };
   for (const id in world.players) snapshot.players[id] = sanitize(world.players[id]);
   for (const id in world.bullets) snapshot.bullets.push(sanitizeBullet(world.bullets[id]));
+  for (const id in world.crates) snapshot.crates.push({ id: world.crates[id].id, x: world.crates[id].x, y: world.crates[id].y, health: world.crates[id].health, maxHealth: world.crates[id].maxHealth });
   socket.emit('worldState', snapshot);
 
   const lb = buildLeaderboard();
@@ -568,8 +711,10 @@ io.on('connection', (socket) => {
     io.emit('playerDisconnected', socket.id);
     io.emit('leaderboardUpdate', buildLeaderboard());
     ensureBotCount();
+    ensureCrateCount();
   });
 });
 
 ensureBotCount();
+ensureCrateCount();
 httpServer.listen(3001, '0.0.0.0', () => console.log('TANK BATTLE.IO — ONE WORLD on port 3001'));
