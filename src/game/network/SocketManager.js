@@ -13,7 +13,7 @@ class SocketManager {
       this.socket = null;
     }
     // Connect directly to game server - CORS is already enabled
-    this.socket = io('http://localhost:3001', {
+    this.socket = io( {
       transports: ['websocket', 'polling']
     });
 
