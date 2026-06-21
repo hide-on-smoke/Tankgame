@@ -17,6 +17,11 @@ export default class PlayScene extends Phaser.Scene {
     this.leaderboard = [];
     this.lastHitBy = null;
     this.myId = null;
+
+    this.myLevel = 1;
+    this.myExp = 0;
+    this.myNextLevelExp = 3;
+    this.pendingUpgrades = [];
   }
 
   create() {
@@ -128,6 +133,19 @@ export default class PlayScene extends Phaser.Scene {
         }
       }
     });
+
+    socketManager.on('playerLevelUp', (data) => {
+      if (!data) return;
+      console.log('[CLIENT] playerLevelUp:', data);
+      const isMe = data.id === socketManager.id;
+      if (isMe) {
+        this.myLevel = data.level;
+        this.myExp = data.exp;
+        this.myNextLevelExp = data.nextLevelExp;
+        this.upgradeOptions = this._randomUpgrades(3);
+        this.showUpgradeMenu();
+      }
+    });
   }
 
   _onWorldState(state) {
@@ -135,6 +153,14 @@ export default class PlayScene extends Phaser.Scene {
 
     const receivedTankIds = new Set();
     const receivedBulletIds = new Set();
+
+    // Sync my XP/Level from worldState so XP bar updates even without level-up event
+    if (this.myId && state.players && state.players[this.myId]) {
+      const me = state.players[this.myId];
+      if (typeof me.level === 'number') this.myLevel = me.level;
+      if (typeof me.exp === 'number') this.myExp = me.exp;
+      if (typeof me.nextLevelExp === 'number') this.myNextLevelExp = me.nextLevelExp;
+    }
 
     if (state.players) {
       for (const [id, playerData] of Object.entries(state.players)) {
@@ -145,9 +171,16 @@ export default class PlayScene extends Phaser.Scene {
           if (playerData.name) {
             this.tanks[id].setName(playerData.name);
           }
+          if (playerData.level) {
+            this.tanks[id].setLevel(playerData.level);
+          }
+          if (typeof playerData.health === 'number') {
+            this.tanks[id].health = playerData.health;
+            this.tanks[id]._drawHealthBar();
+          }
         } else {
           const isMine = id === socketManager.id;
-          const tank = new Tank(this, playerData.x, playerData.y, id, isMine, null, playerData.name);
+          const tank = new Tank(this, playerData.x, playerData.y, id, isMine, null, playerData.name, playerData.level);
           tank.setAngle(playerData.angle || 0);
           this.tanks[id] = tank;
 
@@ -172,7 +205,7 @@ export default class PlayScene extends Phaser.Scene {
         if (existing) {
           // skip
         } else {
-          const bullet = new Bullet(this, bulletData.x, bulletData.y, bulletData.angle, bulletData.ownerId);
+          const bullet = new Bullet(this, bulletData.x, bulletData.y, bulletData.angle, bulletData.ownerId, 400, 10, bulletData.id);
           this.bullets[bulletData.id] = bullet;
           bullet.setDepth(5);
         }
@@ -199,18 +232,25 @@ export default class PlayScene extends Phaser.Scene {
     if (!myTank || !myTank.alive) return;
 
     const now = this.time.now;
-    if (now - this.lastFireTime < this.config.fireRate) return;
+    const fireRate = myTank.fireRate || this.config.fireRate;
+    if (now - this.lastFireTime < fireRate) return;
     this.lastFireTime = now;
 
-    const angleRad = Phaser.Math.DegToRad(myTank.angle);
-    const bulletX = myTank.x + Math.cos(angleRad) * 30;
-    const bulletY = myTank.y + Math.sin(angleRad) * 30;
+    const count = myTank.bulletCount || 1;
+    const spread = 0.2; // radians between bullets
 
     if (this.myId) {
-      socketManager.emit('fireBullet', {
-        x: bulletX, y: bulletY, angle: myTank.angle,
-        bulletId: `${this.myId}-${now}`
-      });
+      for (let i = 0; i < count; i++) {
+        const offset = (i - (count - 1) / 2) * spread;
+        const a = myTank.angle + Phaser.Math.RadToDeg(offset);
+        const rad = Phaser.Math.DegToRad(a);
+        const bulletX = myTank.x + Math.cos(rad) * 30;
+        const bulletY = myTank.y + Math.sin(rad) * 30;
+        socketManager.emit('fireBullet', {
+          x: bulletX, y: bulletY, angle: a,
+          bulletId: `${this.myId}-${now}-${i}`
+        });
+      }
     }
   }
 
@@ -242,6 +282,27 @@ export default class PlayScene extends Phaser.Scene {
       fontSize: '22px', color: '#00ff00', fontFamily: 'Arial',
       stroke: '#000000', strokeThickness: 3, fontStyle: 'bold'
     }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(100);
+
+    this.xpBarY = H - 55;
+    this.xpBarWidth = Math.min(420, W * 0.65);
+    this.xpBarHeight = 14;
+    this.xpBarX = (W - this.xpBarWidth) / 2;
+
+    this.xpBarBg = this.add.graphics().setScrollFactor(0).setDepth(101);
+    this.xpBarFill = this.add.graphics().setScrollFactor(0).setDepth(102);
+    this.xpBarText = this.add.text(this.xpBarX + this.xpBarWidth / 2, this.xpBarY - 16, '', {
+      fontSize: '13px', color: '#ffffff', fontFamily: 'Arial',
+      stroke: '#000000', strokeThickness: 2
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(103);
+
+    this.statsBg = this.add.graphics().setScrollFactor(0).setDepth(99);
+    this.statsText = this.add.text(15, 380, '', {
+      fontSize: '14px', color: '#ffffff', fontFamily: 'Arial',
+      stroke: '#000000', strokeThickness: 2
+    }).setScrollFactor(0).setDepth(100);
+
+    this.upgradeBg = this.add.graphics().setScrollFactor(0).setDepth(200);
+    this.upgradeOptions = [];
   }
 
   _updateUI() {
@@ -253,6 +314,11 @@ export default class PlayScene extends Phaser.Scene {
     if (this.scoreText) {
       this.scoreText.setText(`KILLS: ${this.kills} | DEATHS: ${this.deaths} | SCORE: ${this.score}`);
     }
+
+    if (this.xpBarBg) this.xpBarBg.setPosition(0, 0);
+    if (this.xpBarFill) this.xpBarFill.setPosition(0, 0);
+    this._drawXPBar();
+    this._drawCharacterStats();
 
     if (this.leaderboardText) {
       if (this.leaderboard.length === 0) {
@@ -288,7 +354,8 @@ export default class PlayScene extends Phaser.Scene {
     if (!myTank) return;
 
     const { W, S, A, D, up, down, left, right, SPACE } = this.controls;
-    const { moveSpeed, rotateSpeed } = this.config;
+    const { rotateSpeed } = this.config;
+    const moveSpeed = myTank.speed || this.config.moveSpeed;
     const delta = this.game.loop.delta / 1000;
     let rotated = false, moved = false;
 
@@ -349,11 +416,14 @@ export default class PlayScene extends Phaser.Scene {
     const dist = Phaser.Math.Distance.Between(bullet.x, bullet.y, myTank.x, myTank.y);
     if (dist < 26) {
       bullet.onHit();
+      // Use the original bulletId from server so it can be removed
+      const bulletId = bullet.bulletId || `${bullet.ownerId}-${this.time.now}`;
+      console.log('[CLIENT] bulletHit! bulletId=', bulletId, 'owner=', bullet.ownerId);
       socketManager.emit('bulletHit', {
-        bulletId: `${bullet.ownerId}-${this.time.now}`,
+        bulletId,
         shooterId: bullet.ownerId,
         targetId: this.myId,
-        damage: 10
+        damage: 1
       });
     }
   }
@@ -363,6 +433,129 @@ export default class PlayScene extends Phaser.Scene {
     Object.values(this.tanks).forEach(tank => tank.update());
     this._updateBullets(delta);
     this._updateUI();
+
+    if (this.pendingUpgrades.length > 0) {
+      this.showUpgradeMenu();
+    }
+  }
+
+  _drawXPBar() {
+    if (!this.xpBarBg || !this.xpBarFill || !this.xpBarText) return;
+
+    this.xpBarBg.clear();
+    this.xpBarBg.fillStyle(0x333333, 0.85);
+    this.xpBarBg.fillRoundedRect(this.xpBarX, this.xpBarY, this.xpBarWidth, this.xpBarHeight, 6);
+
+    this.xpBarFill.clear();
+    const pct = Math.max(0, Math.min(1, this.myExp / (this.myNextLevelExp || 1)));
+    const fillW = Math.max(0, this.xpBarWidth * pct);
+    const color = pct >= 1 ? 0xffdd00 : 0x00ccff;
+    this.xpBarFill.fillStyle(color, 1);
+    if (fillW > 0) {
+      this.xpBarFill.fillRoundedRect(this.xpBarX, this.xpBarY, fillW, this.xpBarHeight, 6);
+    }
+
+    this.xpBarText.setText(`Lv. ${this.myLevel} — ${this.myExp} / ${this.myNextLevelExp} XP`);
+  }
+
+  _drawCharacterStats() {
+    if (!this.statsBg || !this.statsText) return;
+    const myTank = this.myId ? this.tanks[this.myId] : null;
+    const hp = myTank ? myTank.health : 0;
+    const maxHp = myTank ? myTank.maxHealth : 100;
+    const regen = myTank ? myTank.regenPerSecond || 0 : 0;
+    const bullets = myTank ? myTank.bulletCount || 1 : 1;
+    const fireRate = myTank ? myTank.fireRate || this.config.fireRate : this.config.fireRate;
+    const spd = myTank ? myTank.speed || this.config.moveSpeed : this.config.moveSpeed;
+    const dmg = myTank ? myTank.damage || 10 : 10;
+    this.statsText.setText(
+      `📊 CHARACTER STATS\n` +
+      `Level: ${this.myLevel}\n` +
+      `Exp: ${this.myExp}/${this.myNextLevelExp}\n` +
+      `HP: ${hp} / ${maxHp} (+${regen}/s)\n` +
+      `Damage: ${dmg}\n` +
+      `Speed: ${spd}\n` +
+      `Fire Rate: ${fireRate}ms\n` +
+      `Bullets: ${bullets}/3`
+    );
+  }
+
+  showUpgradeMenu() {
+    if (this.pendingUpgrades.length === 0) return;
+    this.pendingUpgrades.shift();
+
+    if (!this.upgradeBg || !this.upgradeOptions.length) return;
+
+    const W = this.scale.width;
+    const H = this.scale.height;
+    const boxW = Math.min(520, W * 0.85);
+    const boxH = 220;
+    const boxX = (W - boxW) / 2;
+    const boxY = (H - boxH) / 2 - 20;
+
+    this.upgradeBg.clear();
+    this.upgradeBg.fillStyle(0x000000, 0.85);
+    this.upgradeBg.fillRoundedRect(boxX, boxY, boxW, boxH, 12);
+    this.upgradeBg.lineStyle(2, 0x00ff00, 0.9);
+    this.upgradeBg.strokeRoundedRect(boxX, boxY, boxW, boxH, 12);
+
+    const title = this.add.text(W / 2, boxY + 24, '⬆ LEVEL UP! Choose an upgrade', {
+      fontSize: '20px', color: '#00ff00', fontFamily: 'Arial',
+      stroke: '#000000', strokeThickness: 3, fontStyle: 'bold'
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(201);
+
+    const optionTexts = [];
+    this.upgradeOptions.forEach((opt, idx) => {
+      const y = boxY + 70 + idx * 48;
+      const txt = this.add.text(W / 2, y, `[${idx + 1}] ${opt.label}`, {
+        fontSize: '18px', color: '#ffffff', fontFamily: 'Arial',
+        stroke: '#000000', strokeThickness: 2
+      }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(201);
+      optionTexts.push({ text: txt, key: opt.key });
+    });
+
+    const hint = this.add.text(W / 2, boxY + boxH - 18, 'Press 1/2/3 to select', {
+      fontSize: '14px', color: '#aaaaaa', fontFamily: 'Arial'
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(201);
+
+    const cleanup = () => {
+      title.destroy();
+      hint.destroy();
+      optionTexts.forEach(o => o.text.destroy());
+      this.upgradeBg.clear();
+    };
+
+    const select = (idx) => {
+      if (!optionTexts[idx]) return;
+      const key = optionTexts[idx].key;
+      console.log('[UPGRADE] Selected:', key);
+      if (this.tanks[this.myId]) {
+        this.tanks[this.myId].applyUpgrade(key);
+      }
+      cleanup();
+    };
+
+    this.input.keyboard.once('keydown-ONE', () => select(0));
+    this.input.keyboard.once('keydown-TWO', () => select(1));
+    this.input.keyboard.once('keydown-THREE', () => select(2));
+
+    setTimeout(() => {
+      if (this.upgradeBg && this.upgradeBg.list && this.upgradeBg.list.length) cleanup();
+    }, 8000);
+  }
+
+  _randomUpgrades(count) {
+    const pool = [
+      { key: 'damage', label: '🔥 +Damage' },
+      { key: 'hp', label: '❤️ +Max HP' },
+      { key: 'speed', label: '⚡ +Move Speed' },
+      { key: 'firerate', label: '🚀 +Fire Rate' },
+      { key: 'regen', label: '💚 +HP Regen' },
+      { key: 'armor', label: '🛡️ +Armor' },
+      { key: 'multishot', label: '🎯 +Multishot' }
+    ];
+    const shuffled = pool.sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
   }
 
   destroy() {

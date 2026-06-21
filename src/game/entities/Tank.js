@@ -1,20 +1,27 @@
 import * as Phaser from 'phaser';
 
 export default class Tank extends Phaser.GameObjects.Container {
-  constructor(scene, x, y, id, isMine, color = null, name = null) {
+  constructor(scene, x, y, id, isMine, color = null, name = null, level = null) {
     super(scene, x, y);
     scene.add.existing(this);
 
     this.tankId = id;
     this.tankName = name || (isMine ? "You" : id.slice(0, 6));
+    this.tankLevel = level || 1;
     this.isMine = isMine;
     this.myColor = color || (isMine ? 0x00ff00 : 0xff0000);
     this.health = 100;
     this.maxHealth = 100;
     this.speed = 160;
     this.rotationSpeed = 180;
+    this.damage = 1;
     this.alive = true;
     this.respawnTimer = 0;
+
+    this.regenPerSecond = 1;
+    this.bulletCount = 1;
+    this.maxBullets = 3;
+    this.lastRegenTime = 0;
 
     // Smooth interpolation targets
     this.targetX = x;
@@ -79,8 +86,8 @@ export default class Tank extends Phaser.GameObjects.Container {
     this._drawHealthBar();
     this.add(this.healthBar);
 
-    // Name tag
-    this.nameTag = this.scene.add.text(0, -38, this.tankName, {
+    // Name + Level tag (cùng 1 dòng)
+    this.nameTag = this.scene.add.text(0, -52, `${this.tankName} [Lv.${this.tankLevel}]`, {
       fontSize: '14px',
       color: '#ffffff',
       fontFamily: 'Arial',
@@ -93,7 +100,34 @@ export default class Tank extends Phaser.GameObjects.Container {
   setName(name) {
     if (!name || this.tankName === name) return;
     this.tankName = name;
-    if (this.nameTag) this.nameTag.setText(name);
+    if (this.nameTag) this.nameTag.setText(`${this.tankName} [Lv.${this.tankLevel}]`);
+  }
+
+  setLevel(level) {
+    const lv = Math.max(1, Number(level) || 1);
+    if (this.tankLevel === lv) return;
+    this.tankLevel = lv;
+    if (this.nameTag) {
+      this.nameTag.setText(`${this.tankName} [Lv.${this.tankLevel}]`);
+      this.nameTag.setPosition(0, -52);
+    }
+  }
+
+  applyUpgrade(key) {
+    const map = {
+      damage: () => { this.damage = (this.damage || 10) + 5; },
+      hp: () => { this.maxHealth += 20; this.health = Math.min(this.health + 20, this.maxHealth); },
+      speed: () => { this.speed += 15; this.rotationSpeed += 10; },
+      firerate: () => { this.fireRate = Math.max(80, (this.fireRate || 300) - 25); },
+      regen: () => { this.regenPerSecond = (this.regenPerSecond || 0) + 2; },
+      armor: () => { this.armor = (this.armor || 0) + 1; },
+      multishot: () => { this.bulletCount = Math.min((this.bulletCount || 1) + 1, this.maxBullets); }
+    };
+    const fn = map[key];
+    if (typeof fn === 'function') fn();
+    if (this.scene && this.scene._drawCharacterStats) {
+      this.scene._drawCharacterStats();
+    }
   }
 
   _drawHealthBar() {
@@ -184,17 +218,27 @@ export default class Tank extends Phaser.GameObjects.Container {
   }
 
   // Called each frame by the scene
-  update() {
+  update(time) {
     if (!this.alive) return;
 
     if (!this.isMine) {
       this.updateSmooth();
     }
 
+    // Regen tick
+    if (this.regenPerSecond > 0 && this.health < this.maxHealth) {
+      this.lastRegenTime = this.lastRegenTime || 0;
+      if (time - this.lastRegenTime >= 1000) {
+        this.lastRegenTime = time;
+        this.health = Math.min(this.maxHealth, this.health + this.regenPerSecond);
+        this._drawHealthBar();
+      }
+    }
+
     // Keep health bar elements positioned correctly
     this.healthBarBg.setPosition(0, 0);
     this.healthBar.setPosition(0, 0);
-    this.nameTag.setPosition(0, -38);
+    this.nameTag.setPosition(0, -52);
   }
 
   destroy() {

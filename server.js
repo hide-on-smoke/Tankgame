@@ -14,7 +14,7 @@ const TICK_RATE = 50;
 
 const world = {
   players: {},
-  bullets: {},   // { [id]: { id, ownerId, x, y, angle, speed, alive } }
+  bullets: {},
 };
 
 function logActivePlayers() {
@@ -54,7 +54,6 @@ function generateName() {
   return `${adjs[Math.floor(Math.random()*adjs.length)]}${nouns[Math.floor(Math.random()*nouns.length)]}${Math.floor(Math.random()*999)}`;
 }
 
-// Tick loop: broadcast full state
 setInterval(() => {
   const snapshot = {
     players: {},
@@ -81,13 +80,18 @@ io.on('connection', (socket) => {
     kills: 0,
     deaths: 0,
     score: 0,
+    exp: 0,
+    level: 1,
+    nextLevelExp: 3,
+    health: 100,
+    maxHealth: 100,
+    damage: 1,
     alive: true,
     lastRespawn: Date.now()
   };
 
   console.log(`[CONNECT] ${socket.id} joins. Total: ${Object.keys(world.players).length}`);
 
-  // Send current world snapshot to the new player immediately
   const snapshot = {
     players: {},
     bullets: Object.values(world.bullets).map(b => ({ ...b })),
@@ -97,7 +101,6 @@ io.on('connection', (socket) => {
   }
   socket.emit('worldState', snapshot);
 
-  // Send initial leaderboard to newly connected player
   const initialLb = Object.values(world.players).map(p => ({
     id: p.id, name: p.name,
     kills: p.kills || 0, deaths: p.deaths || 0, score: p.score || 0
@@ -136,14 +139,13 @@ io.on('connection', (socket) => {
       speed: 400,
       alive: true
     };
-    // Auto-remove after 2s
     setTimeout(() => {
       delete world.bullets[bulletId];
     }, 2000);
   });
 
   socket.on('bulletHit', (data) => {
-    const { targetId, shooterId } = data;
+    const { targetId, shooterId, bulletId } = data;
     console.log('[SERVER] bulletHit from', socket.id, 'shooterId:', shooterId, 'targetId:', targetId, 'data:', data);
     const target = world.players[targetId];
     const shooter = world.players[shooterId] || world.players[socket.id];
@@ -151,43 +153,69 @@ io.on('connection', (socket) => {
     if (!target || !target.alive) return;
     if (!shooter) return;
 
-    target.alive = false;
-    target.deaths++;
-    if (shooter.id !== targetId) {
-      shooter.kills++;
-      shooter.score += 1;
-      console.log('[SERVER] Kill counted! Shooter', shooter.id, 'now has', shooter.kills, 'kills,', shooter.score, 'score');
+    // Remove bullet immediately on hit
+    if (bulletId && world.bullets[bulletId]) {
+      delete world.bullets[bulletId];
     }
 
-    io.emit('tankDied', {
-      id: targetId,
-      killerId: shooter ? shooter.id : 'unknown'
-    });
+    const dmg = shooter.damage || 1;
+    const currentHp = target.health ?? 100;
+    target.health = Math.max(0, currentHp - dmg);
 
-    io.emit('leaderboardUpdate', Object.values(world.players).map(p => ({
-      id: p.id, name: p.name,
-      kills: p.kills || 0, deaths: p.deaths || 0, score: p.score || 0
-    })));
+    if (target.health <= 0) {
+      target.alive = false;
+      target.deaths++;
 
-    setTimeout(() => {
-      if (world.players[targetId]) {
-        const sp = spawnPlayer(targetId);
-        world.players[targetId].alive = true;
-        world.players[targetId].x = sp.x;
-        world.players[targetId].y = sp.y;
-        io.emit('playerRespawned', {
-          id: targetId,
-          x: sp.x,
-          y: sp.y
-        });
+      if (shooter.id !== targetId) {
+        shooter.kills++;
+        shooter.score += 1;
+        shooter.exp = (shooter.exp || 0) + 1;
+        console.log('[SERVER] Kill counted! Shooter', shooter.id, 'now has', shooter.kills, 'kills,', shooter.score, 'score');
+
+        while (shooter.exp >= shooter.nextLevelExp) {
+          shooter.exp -= shooter.nextLevelExp;
+          shooter.level = (shooter.level || 1) + 1;
+          shooter.nextLevelExp = shooter.level * 3;
+          console.log('[SERVER] Player', shooter.id, 'leveled up to', shooter.level);
+          io.emit('playerLevelUp', {
+            id: shooter.id,
+            level: shooter.level,
+            exp: shooter.exp,
+            nextLevelExp: shooter.nextLevelExp
+          });
+        }
       }
-    }, 3000);
+
+      io.emit('tankDied', {
+        id: targetId,
+        killerId: shooter ? shooter.id : 'unknown'
+      });
+
+      io.emit('leaderboardUpdate', Object.values(world.players).map(p => ({
+        id: p.id, name: p.name,
+        kills: p.kills || 0, deaths: p.deaths || 0, score: p.score || 0
+      })));
+
+      setTimeout(() => {
+        if (world.players[targetId]) {
+          const sp = spawnPlayer(targetId);
+          world.players[targetId].alive = true;
+          world.players[targetId].health = world.players[targetId].maxHealth;
+          world.players[targetId].x = sp.x;
+          world.players[targetId].y = sp.y;
+          io.emit('playerRespawned', {
+            id: targetId,
+            x: sp.x,
+            y: sp.y
+          });
+        }
+      }, 3000);
+    }
   });
 
   socket.on('disconnect', () => {
     console.log(`[DISCONNECT] ${socket.id} leaves.`);
     delete world.players[socket.id];
-    // Remove all bullets from this player
     for (const id in world.bullets) {
       if (world.bullets[id].ownerId === socket.id) delete world.bullets[id];
     }

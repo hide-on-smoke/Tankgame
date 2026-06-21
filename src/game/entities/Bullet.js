@@ -1,11 +1,12 @@
 import * as Phaser from 'phaser';
 
 export default class Bullet extends Phaser.GameObjects.Graphics {
-  constructor(scene, x, y, angle, ownerId, speed = 400, damage = 10) {
+  constructor(scene, x, y, angle, ownerId, speed = 400, damage = 10, bulletId = null) {
     super(scene);
     scene.add.existing(this);
 
     this.ownerId = ownerId;
+    this.bulletId = bulletId || null;
     this.damage = damage;
     this.speed = speed;
     this.angle_rad = Phaser.Math.DegToRad(angle);
