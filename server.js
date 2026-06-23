@@ -1,9 +1,23 @@
+import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const httpServer = createServer();
+// Cấu hình đường dẫn cho chuẩn ES Module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*' }
+});
+
+// Phục vụ file Frontend (Giao diện game)
+app.use(express.static(path.join(__dirname, 'dist')));
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 const WORLD_WIDTH = 4200;
@@ -717,4 +731,7 @@ io.on('connection', (socket) => {
 
 ensureBotCount();
 ensureCrateCount();
-httpServer.listen(3001, '0.0.0.0', () => console.log('TANK BATTLE.IO — ONE WORLD on port 3001'));
+const PORT = process.env.PORT || 3001;
+httpServer.listen(PORT, () => {
+    console.log(`TANK BATTLE.IO — ONE WORLD on port ${PORT}`);
+});
