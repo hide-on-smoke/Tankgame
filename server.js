@@ -16,7 +16,9 @@ const io = new Server(httpServer, {
 
 // Phục vụ file Frontend (Giao diện game)
 app.use(express.static(path.join(__dirname, 'dist')));
-app.get('*', { sensitive: false, strict: false, end: false }, (req, res) => {
+
+app.get('/:path(.*)', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 const WORLD_WIDTH = 4200;
