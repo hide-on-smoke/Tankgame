@@ -10,6 +10,8 @@ export default defineConfig({
         target: 'http://127.0.0.1:3001',
         ws: true
       }
-    }
+    },
+    // Disable HMR to prevent Zod/eval CSP errors that freeze the browser
+    hmr: false
   }
 })
